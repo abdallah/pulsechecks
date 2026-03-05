@@ -2,6 +2,8 @@
 
 This directory contains GitHub Actions workflows for automated testing and deployment.
 
+> **Current safety setting (March 2026):** deployment jobs in `aws-deploy.yml` and `gcp-deploy.yml` are hard-disabled (`if: ${{ false }}`), so GitHub Actions will not execute real cloud deployments.
+
 ## Workflows
 
 ### 1. Test (`test.yml`)
@@ -169,7 +171,9 @@ Deploys the application to Cloud Run and Firebase Hosting.
 
 ## Manual Deployment
 
-You can trigger deployments manually:
+GitHub Actions manual deployment is currently disabled by policy. Use the repository deployment scripts/process instead (for example `scripts/deploy_aws.sh` and `scripts/deploy_gcp.sh`).
+
+Historical/manual GitHub deployment flow (kept for reference):
 
 1. Go to Actions tab
 2. Select workflow (AWS Deploy or GCP Deploy)

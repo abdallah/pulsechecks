@@ -128,6 +128,7 @@ jobs:
 
   deploy-infrastructure:
     name: Deploy AWS Infrastructure
+    if: ${{ false }}
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend]
     permissions:
@@ -162,6 +163,7 @@ jobs:
 
   deploy-lambda:
     name: Deploy Lambda Functions
+    if: ${{ false }}
     runs-on: ubuntu-latest
     needs: [build-lambda, deploy-infrastructure]
     permissions:
@@ -218,6 +220,7 @@ jobs:
 
   deploy-frontend:
     name: Deploy Frontend to S3/CloudFront
+    if: ${{ false }}
     runs-on: ubuntu-latest
     needs: [build-frontend, deploy-infrastructure]
     permissions:

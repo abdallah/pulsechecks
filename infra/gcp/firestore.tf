@@ -37,6 +37,11 @@ resource "google_firestore_index" "check_token_index" {
     order      = "ASCENDING"
   }
 
+  fields {
+    field_path = "__name__"
+    order      = "ASCENDING"
+  }
+
   depends_on = [google_firestore_database.pulsechecks]
 }
 
@@ -51,6 +56,11 @@ resource "google_firestore_index" "check_team_index" {
     order      = "ASCENDING"
   }
 
+  fields {
+    field_path = "__name__"
+    order      = "ASCENDING"
+  }
+
   depends_on = [google_firestore_database.pulsechecks]
 }
 
@@ -62,6 +72,11 @@ resource "google_firestore_index" "check_alert_after_index" {
 
   fields {
     field_path = "alertAfterAt"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "__name__"
     order      = "ASCENDING"
   }
 

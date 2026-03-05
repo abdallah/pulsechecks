@@ -34,19 +34,19 @@ provider "google-beta" {
 # Enable required Google Cloud APIs
 resource "google_project_service" "required_apis" {
   for_each = toset([
-    "run.googleapis.com",                    # Cloud Run
-    "firestore.googleapis.com",             # Firestore
-    "firebase.googleapis.com",              # Firebase
-    "identitytoolkit.googleapis.com",       # Firebase Auth / Identity Platform
-    "cloudscheduler.googleapis.com",        # Cloud Scheduler
-    "cloudbuild.googleapis.com",            # Cloud Build (for container builds)
-    "artifactregistry.googleapis.com",      # Artifact Registry
-    "pubsub.googleapis.com",                # Pub/Sub
-    "logging.googleapis.com",               # Cloud Logging
-    "monitoring.googleapis.com",            # Cloud Monitoring
-    "cloudresourcemanager.googleapis.com",  # Resource Manager
-    "serviceusage.googleapis.com",          # Service Usage API
-    "firebasehosting.googleapis.com",       # Firebase Hosting
+    "run.googleapis.com",                  # Cloud Run
+    "firestore.googleapis.com",            # Firestore
+    "firebase.googleapis.com",             # Firebase
+    "identitytoolkit.googleapis.com",      # Firebase Auth / Identity Platform
+    "cloudscheduler.googleapis.com",       # Cloud Scheduler
+    "cloudbuild.googleapis.com",           # Cloud Build (for container builds)
+    "artifactregistry.googleapis.com",     # Artifact Registry
+    "pubsub.googleapis.com",               # Pub/Sub
+    "logging.googleapis.com",              # Cloud Logging
+    "monitoring.googleapis.com",           # Cloud Monitoring
+    "cloudresourcemanager.googleapis.com", # Resource Manager
+    "serviceusage.googleapis.com",         # Service Usage API
+    "firebasehosting.googleapis.com",      # Firebase Hosting
   ])
 
   service = each.key

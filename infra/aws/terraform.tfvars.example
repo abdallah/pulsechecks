@@ -1,0 +1,10 @@
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to git
+
+aws_region             = "us-east-1"
+project_name           = "pulsechecks"
+environment            = "prod"
+cognito_domain_prefix  = "pulsechecks-yourcompany" # Must be globally unique
+google_client_id       = "your-google-client-id.apps.googleusercontent.com"
+google_client_secret   = "your-google-client-secret"
+allowed_email_domains  = "yourdomain.com,example.com"

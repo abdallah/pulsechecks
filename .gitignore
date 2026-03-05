@@ -1,0 +1,74 @@
+# Build artifacts
+backend/package/
+backend/lambda.zip
+frontend/dist/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+!terraform.tfvars.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+package/
+*.zip
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Secrets
+.env
+secrets.txt
+*.pem
+*.key
+
+# Obsolete (no longer using SAM)
+.aws-sam/
+samconfig.toml
+.claude/
+.claude/settings.local.json

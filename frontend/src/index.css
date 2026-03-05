@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Force frontend deployment - 2025-12-26 12:09 */
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}

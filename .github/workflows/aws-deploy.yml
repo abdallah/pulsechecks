@@ -1,0 +1,281 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'infra/aws/**'
+      - '.github/workflows/aws-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - prod
+          - staging
+
+env:
+  AWS_REGION: us-east-1
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'prod' }}
+
+jobs:
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest pytest-asyncio
+
+      - name: Run tests
+        working-directory: backend
+        run: python -m pytest tests/ -v --tb=short
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm run test:run
+
+  build-lambda:
+    name: Build Lambda Package
+    runs-on: ubuntu-latest
+    needs: [test-backend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Build Lambda package
+        working-directory: backend
+        run: |
+          chmod +x build_package.sh
+          ./build_package.sh
+
+      - name: Upload Lambda artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-package
+          path: backend/lambda.zip
+          retention-days: 1
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: [test-frontend]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build for AWS
+        working-directory: frontend
+        run: npm run build:aws
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 1
+
+  deploy-infrastructure:
+    name: Deploy AWS Infrastructure
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init
+        working-directory: infra/aws
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: infra/aws
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: infra/aws
+        run: terraform apply -auto-approve tfplan
+
+  deploy-lambda:
+    name: Deploy Lambda Functions
+    runs-on: ubuntu-latest
+    needs: [build-lambda, deploy-infrastructure]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-package
+          path: backend/
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+          terraform_wrapper: false
+
+      - name: Get Lambda function names
+        id: get-functions
+        working-directory: infra/aws
+        run: |
+          terraform init
+          echo "api_function=$(terraform output -raw api_function_name 2>/dev/null || echo 'pulsechecks-api-${{ env.ENVIRONMENT }}')" >> $GITHUB_OUTPUT
+          echo "ping_function=$(terraform output -raw ping_function_name 2>/dev/null || echo 'pulsechecks-ping-${{ env.ENVIRONMENT }}')" >> $GITHUB_OUTPUT
+          echo "detector_function=$(terraform output -raw late_detector_function_name 2>/dev/null || echo 'pulsechecks-late-detector-${{ env.ENVIRONMENT }}')" >> $GITHUB_OUTPUT
+
+      - name: Deploy Lambda functions
+        working-directory: backend
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ steps.get-functions.outputs.api_function }} \
+            --zip-file fileb://lambda.zip \
+            --no-cli-pager
+
+          aws lambda update-function-code \
+            --function-name ${{ steps.get-functions.outputs.ping_function }} \
+            --zip-file fileb://lambda.zip \
+            --no-cli-pager
+
+          aws lambda update-function-code \
+            --function-name ${{ steps.get-functions.outputs.detector_function }} \
+            --zip-file fileb://lambda.zip \
+            --no-cli-pager
+
+  deploy-frontend:
+    name: Deploy Frontend to S3/CloudFront
+    runs-on: ubuntu-latest
+    needs: [build-frontend, deploy-infrastructure]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+          terraform_wrapper: false
+
+      - name: Get S3 bucket and CloudFront ID
+        id: get-outputs
+        working-directory: infra/aws
+        run: |
+          terraform init
+          echo "s3_bucket=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
+          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+          echo "cloudfront_url=$(terraform output -raw cloudfront_url)" >> $GITHUB_OUTPUT
+
+      - name: Sync to S3
+        working-directory: frontend
+        run: |
+          aws s3 sync dist/ s3://${{ steps.get-outputs.outputs.s3_bucket }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000" \
+            --exclude "index.html"
+
+          aws s3 cp dist/index.html s3://${{ steps.get-outputs.outputs.s3_bucket }}/index.html \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.get-outputs.outputs.cloudfront_id }} \
+            --paths "/*" \
+            --no-cli-pager
+
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Complete! 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend URL:** ${{ steps.get-outputs.outputs.cloudfront_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ env.ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY

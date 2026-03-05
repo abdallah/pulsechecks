@@ -1,0 +1,28 @@
+# GCP Configuration
+gcp_project_id = "your-gcp-project-id"
+gcp_region     = "us-central1"
+environment    = "prod"
+
+# Domain Configuration
+domain_name     = "pulsechecks.example.com"
+api_domain_name = "api.pulsechecks.example.com"
+
+# Authentication
+allowed_email_domains = "example.com,company.com"
+
+# Google OAuth (for Firebase Auth)
+# Get these from Google Cloud Console > APIs & Services > Credentials
+google_oauth_client_id     = "your-client-id.apps.googleusercontent.com"
+google_oauth_client_secret = "your-client-secret"
+
+# Container Image
+# Build and push first: gcloud builds submit --tag gcr.io/your-project/pulsechecks-api
+container_image = "gcr.io/your-gcp-project-id/pulsechecks-api:latest"
+
+# Auto-scaling Configuration
+min_instances = 0  # Scale to zero for cost savings
+max_instances = 10
+
+# Resource Limits
+cpu_limit    = "1000m"  # 1 vCPU
+memory_limit = "512Mi"  # 512 MB

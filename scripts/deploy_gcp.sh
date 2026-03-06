@@ -76,6 +76,17 @@ if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/nu
     exit 1
 fi
 
+# Ensure ADC quota project is set for APIs that require it (e.g. Identity Toolkit)
+if gcloud auth application-default print-access-token >/dev/null 2>&1; then
+    print_info "Setting ADC quota project to ${GCP_PROJECT_ID}..."
+    if ! gcloud auth application-default set-quota-project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+        print_warning "Could not set ADC quota project automatically. You may need to run:"
+        echo "  gcloud auth application-default set-quota-project $GCP_PROJECT_ID"
+    fi
+else
+    print_warning "Application Default Credentials are not initialized. Run: gcloud auth application-default login"
+fi
+
 # Build and push Docker image
 print_header "1/4 - Building and Pushing Docker Image"
 cd "$PROJECT_ROOT/backend"
@@ -87,7 +98,13 @@ echo ""
 print_header "2/4 - Deploying Infrastructure"
 cd "$PROJECT_ROOT/infra/gcp"
 print_info "Initializing Terraform..."
-terraform init
+if [ -n "$TF_HTTP_ADDRESS" ]; then
+    print_info "Using HTTP backend (TF_HTTP_ADDRESS is set)"
+    terraform init
+else
+    print_warning "TF_HTTP_ADDRESS is not set; using local Terraform state for this deployment"
+    terraform init -backend=false
+fi
 
 print_info "Applying Terraform configuration..."
 terraform apply -auto-approve
@@ -101,7 +118,10 @@ echo ""
 print_header "3/4 - Deploying Firestore Indexes"
 cd "$PROJECT_ROOT/backend"
 print_info "Deploying Firestore indexes and rules..."
-firebase deploy --only firestore:indexes,firestore:rules --project "$GCP_PROJECT_ID"
+firebase deploy \
+    --only firestore:indexes,firestore:rules \
+    --project "$GCP_PROJECT_ID" \
+    --config "$PROJECT_ROOT/backend/firebase.json"
 echo ""
 
 # Deploy frontend
@@ -115,9 +135,15 @@ print_info "Building frontend for GCP..."
 VITE_CLOUD_PROVIDER=gcp npm run build
 
 print_info "Deploying to Firebase Hosting..."
-firebase deploy --only hosting --project "$GCP_PROJECT_ID"
+firebase deploy \
+    --only hosting \
+    --project "$GCP_PROJECT_ID" \
+    --config "$PROJECT_ROOT/frontend/firebase.json"
 
-FRONTEND_URL=$(firebase hosting:sites:list --project "$GCP_PROJECT_ID" 2>/dev/null | grep -oP 'https://[^ ]+' | head -1 || echo "Check Firebase console for URL")
+FRONTEND_URL=$(firebase hosting:sites:list --project "$GCP_PROJECT_ID" 2>/dev/null | grep -Eo 'https://[^ ]+' | head -1)
+if [ -z "$FRONTEND_URL" ]; then
+    FRONTEND_URL="https://${GCP_PROJECT_ID}.web.app"
+fi
 echo ""
 
 print_header "Deployment Complete"

@@ -7,6 +7,8 @@ resource "google_monitoring_dashboard" "pulsechecks_dashboard" {
       tiles = [
         # Cloud Run Request Count
         {
+          xPos   = 0
+          yPos   = 0
           width  = 6
           height = 4
           widget = {
@@ -15,7 +17,7 @@ resource "google_monitoring_dashboard" "pulsechecks_dashboard" {
               dataSets = [{
                 timeSeriesQuery = {
                   timeSeriesFilter = {
-                    filter = "resource.type=\"cloud_run_revision\" resource.labels.service_name=\"${google_cloud_run_service.pulsechecks_api.name}\""
+                    filter = "resource.type=\"cloud_run_revision\" resource.labels.service_name=\"${google_cloud_run_service.pulsechecks_api.name}\" metric.type=\"run.googleapis.com/request_count\""
                     aggregation = {
                       alignmentPeriod  = "60s"
                       perSeriesAligner = "ALIGN_RATE"
@@ -29,6 +31,8 @@ resource "google_monitoring_dashboard" "pulsechecks_dashboard" {
         },
         # Cloud Run Error Rate
         {
+          xPos   = 6
+          yPos   = 0
           width  = 6
           height = 4
           widget = {
@@ -51,6 +55,8 @@ resource "google_monitoring_dashboard" "pulsechecks_dashboard" {
         },
         # Cloud Run Latency
         {
+          xPos   = 0
+          yPos   = 4
           width  = 6
           height = 4
           widget = {
@@ -73,6 +79,8 @@ resource "google_monitoring_dashboard" "pulsechecks_dashboard" {
         },
         # Firestore Reads
         {
+          xPos   = 6
+          yPos   = 4
           width  = 6
           height = 4
           widget = {
@@ -146,7 +154,7 @@ resource "google_monitoring_alert_policy" "high_latency" {
       threshold_value = 2000
       aggregations {
         alignment_period   = "60s"
-        per_series_aligner = "ALIGN_DELTA"
+        per_series_aligner = "ALIGN_PERCENTILE_95"
       }
     }
   }

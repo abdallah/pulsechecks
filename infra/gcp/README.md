@@ -97,7 +97,15 @@ container_image = "gcr.io/YOUR_PROJECT_ID/pulsechecks-api:latest"
 ### 4. Deploy Infrastructure
 
 ```bash
-terraform init
+# Local state
+terraform init -backend=false
+
+# Or HTTP remote state (if configured)
+# export TF_HTTP_ADDRESS=...
+# export TF_HTTP_LOCK_ADDRESS=...
+# export TF_HTTP_UNLOCK_ADDRESS=...
+# terraform init
+
 terraform plan
 terraform apply
 ```

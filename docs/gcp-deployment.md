@@ -63,6 +63,9 @@ npm install -g firebase-tools
    # Set application default credentials for Terraform
    gcloud auth application-default login
 
+  # Set quota project for ADC (required by identitytoolkit.googleapis.com)
+  gcloud auth application-default set-quota-project your-project-id
+
    # Authenticate Firebase CLI
    firebase login
    ```
@@ -225,7 +228,15 @@ container_image = "gcr.io/your-project-id/pulsechecks-api:latest"
 
 ```bash
 cd ../../infra/gcp
-terraform init
+# Option A: local state (default if TF_HTTP_ADDRESS is not configured)
+terraform init -backend=false
+
+# Option B: HTTP remote state (GitLab/state service)
+# export TF_HTTP_ADDRESS=...
+# export TF_HTTP_LOCK_ADDRESS=...
+# export TF_HTTP_UNLOCK_ADDRESS=...
+# terraform init
+
 terraform plan  # Review changes
 terraform apply
 ```
@@ -247,7 +258,10 @@ terraform output
 
 ```bash
 cd ../../backend
-firebase deploy --only firestore:indexes,firestore:rules --project your-project-id
+firebase deploy \
+  --only firestore:indexes,firestore:rules \
+  --project your-project-id \
+  --config firebase.json
 ```
 
 This deploys:

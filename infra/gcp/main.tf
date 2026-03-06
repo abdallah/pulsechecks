@@ -15,20 +15,24 @@ terraform {
   # Configure backend for state storage
   # For GitLab: Use HTTP backend
   # For local: Comment out or use local backend
-  backend "http" {
-    # Set via environment variables:
-    # TF_HTTP_ADDRESS, TF_HTTP_LOCK_ADDRESS, TF_HTTP_UNLOCK_ADDRESS
-  }
+  #  backend "http" {
+  # Set via environment variables:
+  # TF_HTTP_ADDRESS, TF_HTTP_LOCK_ADDRESS, TF_HTTP_UNLOCK_ADDRESS
+  #  }
 }
 
 provider "google" {
-  project = var.gcp_project_id
-  region  = var.gcp_region
+  project               = var.gcp_project_id
+  region                = var.gcp_region
+  billing_project       = var.gcp_project_id
+  user_project_override = true
 }
 
 provider "google-beta" {
-  project = var.gcp_project_id
-  region  = var.gcp_region
+  project               = var.gcp_project_id
+  region                = var.gcp_region
+  billing_project       = var.gcp_project_id
+  user_project_override = true
 }
 
 # Enable required Google Cloud APIs

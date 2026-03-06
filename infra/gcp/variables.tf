@@ -70,3 +70,27 @@ variable "memory_limit" {
   type        = string
   default     = "512Mi"
 }
+
+variable "enable_custom_domain_mapping" {
+  description = "Enable Cloud Run custom domain mapping for api_domain_name"
+  type        = bool
+  default     = false
+}
+
+variable "enable_dns_records" {
+  description = "Create Cloud DNS CNAME records for domain_name and api_domain_name"
+  type        = bool
+  default     = false
+}
+
+variable "dns_managed_zone_name" {
+  description = "Existing Cloud DNS managed zone name used when enable_dns_records is true"
+  type        = string
+  default     = ""
+}
+
+variable "dns_cname_target" {
+  description = "CNAME target for Firebase/Cloud Run custom domains"
+  type        = string
+  default     = "ghs.googlehosted.com."
+}

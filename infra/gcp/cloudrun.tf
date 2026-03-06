@@ -101,17 +101,42 @@ resource "google_cloud_run_service_iam_member" "public_access" {
 }
 
 # Custom domain mapping for Cloud Run (optional)
-# Note: Requires domain ownership verification
-# resource "google_cloud_run_domain_mapping" "api_domain" {
-#   name     = var.api_domain_name
-#   location = var.gcp_region
-#   project  = var.gcp_project_id
-#
-#   metadata {
-#     namespace = var.gcp_project_id
-#   }
-#
-#   spec {
-#     route_name = google_cloud_run_service.pulsechecks_api.name
-#   }
-# }
+resource "google_cloud_run_domain_mapping" "api_domain" {
+  count    = var.enable_custom_domain_mapping ? 1 : 0
+  provider = google-beta
+  name     = var.api_domain_name
+  location = var.gcp_region
+  project  = var.gcp_project_id
+
+  metadata {
+    namespace = var.gcp_project_id
+  }
+
+  spec {
+    route_name = google_cloud_run_service.pulsechecks_api.name
+  }
+
+  depends_on = [google_cloud_run_service.pulsechecks_api]
+}
+
+locals {
+  create_dns_records = var.enable_dns_records && var.dns_managed_zone_name != ""
+}
+
+resource "google_dns_record_set" "api_domain_cname" {
+  count        = local.create_dns_records ? 1 : 0
+  managed_zone = var.dns_managed_zone_name
+  name         = "${var.api_domain_name}."
+  type         = "CNAME"
+  ttl          = 300
+  rrdatas      = [var.dns_cname_target]
+}
+
+resource "google_dns_record_set" "frontend_domain_cname" {
+  count        = local.create_dns_records ? 1 : 0
+  managed_zone = var.dns_managed_zone_name
+  name         = "${var.domain_name}."
+  type         = "CNAME"
+  ttl          = 300
+  rrdatas      = [var.dns_cname_target]
+}

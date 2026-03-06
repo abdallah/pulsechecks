@@ -7,6 +7,12 @@ environment    = "prod"
 domain_name     = "pulsechecks.example.com"
 api_domain_name = "api.pulsechecks.example.com"
 
+# Optional: manage custom domain mapping + Cloud DNS records via Terraform
+enable_custom_domain_mapping = false
+enable_dns_records           = false
+dns_managed_zone_name        = "" # e.g. "otgs-work-zone"
+dns_cname_target             = "ghs.googlehosted.com."
+
 # Authentication
 allowed_email_domains = "example.com,company.com"
 

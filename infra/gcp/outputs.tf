@@ -39,6 +39,16 @@ output "service_account_email" {
   value       = google_service_account.cloudrun_sa.email
 }
 
+output "api_custom_domain" {
+  description = "Configured API custom domain (if enabled)"
+  value       = var.enable_custom_domain_mapping ? var.api_domain_name : null
+}
+
+output "dns_records_managed" {
+  description = "Whether Cloud DNS records are managed by Terraform"
+  value       = var.enable_dns_records && var.dns_managed_zone_name != ""
+}
+
 output "deployment_instructions" {
   description = "Instructions for deploying the application"
   value       = <<-EOT

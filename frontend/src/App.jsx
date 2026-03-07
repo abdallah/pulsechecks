@@ -62,7 +62,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
         <Route path="/callback" element={<CallbackPage onLogin={handleLogin} />} />
         
         {authenticated ? (

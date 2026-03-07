@@ -148,13 +148,37 @@ async function initFirebase() {
 
 async function firebaseLogin() {
   const auth = await initFirebase()
-  const { signInWithRedirect, GoogleAuthProvider } = await import('firebase/auth')
+  const { signInWithPopup, signInWithRedirect, GoogleAuthProvider } = await import('firebase/auth')
 
   const provider = new GoogleAuthProvider()
   provider.addScope('email')
   provider.addScope('profile')
 
-  await signInWithRedirect(auth, provider)
+  try {
+    const result = await signInWithPopup(auth, provider)
+    if (!result?.user) {
+      return null
+    }
+
+    const idToken = await result.user.getIdToken()
+    return {
+      id_token: idToken,
+      access_token: idToken,
+    }
+  } catch (error) {
+    const popupErrors = new Set([
+      'auth/popup-blocked',
+      'auth/popup-closed-by-user',
+      'auth/cancelled-popup-request',
+    ])
+
+    if (popupErrors.has(error?.code)) {
+      await signInWithRedirect(auth, provider)
+      return null
+    }
+
+    throw error
+  }
 }
 
 async function firebaseHandleCallback() {
@@ -164,7 +188,7 @@ async function firebaseHandleCallback() {
   const result = await getRedirectResult(auth)
 
   if (!result) {
-    throw new Error('No Firebase redirect result')
+    return null
   }
 
   // Get ID token from Firebase

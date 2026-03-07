@@ -111,6 +111,8 @@ terraform apply -auto-approve
 
 # Get outputs
 CLOUDRUN_URL=$(terraform output -raw cloudrun_url)
+FIREBASE_WEB_API_KEY=$(terraform output -raw firebase_web_api_key)
+FIREBASE_AUTH_DOMAIN=$(terraform output -raw firebase_auth_domain)
 print_info "Infrastructure deployed successfully"
 echo ""
 
@@ -132,7 +134,14 @@ print_info "Installing dependencies..."
 npm ci --silent
 
 print_info "Building frontend for GCP..."
-VITE_CLOUD_PROVIDER=gcp npm run build
+API_URL_FOR_FRONTEND=${VITE_API_URL:-$CLOUDRUN_URL}
+print_info "Using frontend API URL: ${API_URL_FOR_FRONTEND}"
+VITE_CLOUD_PROVIDER=gcp \
+VITE_API_URL="$API_URL_FOR_FRONTEND" \
+VITE_FIREBASE_API_KEY="$FIREBASE_WEB_API_KEY" \
+VITE_FIREBASE_AUTH_DOMAIN="$FIREBASE_AUTH_DOMAIN" \
+VITE_FIREBASE_PROJECT_ID="$GCP_PROJECT_ID" \
+npm run build
 
 print_info "Deploying to Firebase Hosting..."
 firebase deploy \

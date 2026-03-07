@@ -277,7 +277,12 @@ cd ../frontend
 npm ci
 
 # Build for GCP
-VITE_CLOUD_PROVIDER=gcp npm run build
+VITE_CLOUD_PROVIDER=gcp \
+VITE_API_URL=https://your-cloudrun-url.run.app \
+VITE_FIREBASE_API_KEY=your-firebase-api-key \
+VITE_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com \
+VITE_FIREBASE_PROJECT_ID=your-project-id \
+npm run build
 
 # Deploy to Firebase Hosting
 firebase deploy --only hosting --project your-project-id

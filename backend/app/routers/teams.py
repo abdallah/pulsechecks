@@ -155,26 +155,16 @@ async def list_team_members(
             "status": "active"
         })
     
-    # Get team info to find pending invitations by scanning
-    # This is a simplified approach - in production you'd want a GSI
-    async with db._get_table() as table:
-        response = await table.scan(
-            FilterExpression="begins_with(PK, :pk_prefix) AND SK = :sk",
-            ExpressionAttributeValues={
-                ":pk_prefix": "INVITATION#",
-                ":sk": f"TEAM#{team_id}",
-            },
-        )
-        
-        for item in response.get("Items", []):
-            result.append({
-                "userId": None,
-                "email": item["email"],
-                "name": "Pending User",
-                "role": item["role"],
-                "joinedAt": item["invitedAt"],
-                "status": "pending"
-            })
+    pending_invitations = await db.list_pending_invitations_for_team(team_id)
+    for invitation in pending_invitations:
+        result.append({
+            "userId": None,
+            "email": invitation.email,
+            "name": "Pending User",
+            "role": invitation.role.value,
+            "joinedAt": invitation.invited_at,
+            "status": "pending"
+        })
     
     return result
 

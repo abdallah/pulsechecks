@@ -620,6 +620,28 @@ class DynamoDBClient(DatabaseInterface):
                 for item in response.get("Items", [])
             ]
 
+    async def list_pending_invitations_for_team(self, team_id: str) -> List[PendingInvitation]:
+        """List all pending invitations for a team."""
+        async with self._get_table() as table:
+            response = await table.scan(
+                FilterExpression="begins_with(PK, :pk_prefix) AND SK = :sk",
+                ExpressionAttributeValues={
+                    ":pk_prefix": "INVITATION#",
+                    ":sk": f"TEAM#{team_id}",
+                },
+            )
+
+            return [
+                PendingInvitation(
+                    email=item["email"],
+                    team_id=item["teamId"],
+                    role=Role(item["role"]),
+                    invited_by=item["invitedBy"],
+                    invited_at=item["invitedAt"],
+                )
+                for item in response.get("Items", [])
+            ]
+
     async def delete_pending_invitation(self, email: str, team_id: str) -> None:
         """Delete a pending invitation."""
         async with self._get_table() as table:

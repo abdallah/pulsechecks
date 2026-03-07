@@ -221,6 +221,11 @@ class DatabaseInterface(ABC):
         pass
 
     @abstractmethod
+    async def list_pending_invitations_for_team(self, team_id: str) -> List[PendingInvitation]:
+        """List all pending invitations for a team."""
+        pass
+
+    @abstractmethod
     async def delete_pending_invitation(self, email: str, team_id: str) -> None:
         """Delete a pending invitation."""
         pass

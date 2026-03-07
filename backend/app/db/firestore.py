@@ -615,6 +615,30 @@ class FirestoreClient(DatabaseInterface):
 
         return invitations
 
+    async def list_pending_invitations_for_team(self, team_id: str) -> List[PendingInvitation]:
+        """List all pending invitations for a team."""
+        invitations = []
+        invitations_root = self.db.collection('invitations')
+
+        async for invitation_doc in invitations_root.stream():
+            email = invitation_doc.id
+            team_invitation_ref = invitation_doc.reference.collection('teams').document(team_id)
+            team_invitation_doc = await team_invitation_ref.get()
+
+            if not team_invitation_doc.exists:
+                continue
+
+            data = team_invitation_doc.to_dict()
+            invitations.append(PendingInvitation(
+                email=data.get('email', email),
+                team_id=data['teamId'],
+                role=Role(data['role']),
+                invited_by=data['invitedBy'],
+                invited_at=data['invitedAt'],
+            ))
+
+        return invitations
+
     async def delete_pending_invitation(self, email: str, team_id: str) -> None:
         """Delete a pending invitation."""
         doc_ref = (self.db.collection('invitations').document(email)

@@ -22,7 +22,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
   const [newAlertName, setNewAlertName] = useState('')
   const [newAlertDisplayName, setNewAlertDisplayName] = useState('')
   const [newAlertShared, setNewAlertShared] = useState(false)
-  const [newChannelType, setNewChannelType] = useState('sns')
+  const [newChannelType, setNewChannelType] = useState('mattermost')
   const [newChannelConfig, setNewChannelConfig] = useState({})
   const [channels, setChannels] = useState([])
   const [editingChannel, setEditingChannel] = useState(null)
@@ -193,7 +193,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
       await api.createAlertChannel(teamId, channelData)
       setNewAlertName('')
       setNewAlertDisplayName('')
-      setNewChannelType('sns')
+      setNewChannelType('mattermost')
       setNewChannelConfig({})
       setNewAlertShared(false)
       setShowAddAlert(false)
@@ -244,6 +244,22 @@ export default function TeamSettingsPage({ user, onLogout }) {
             value={newChannelConfig.webhook_url || ''}
             onChange={(e) => setNewChannelConfig({ webhook_url: e.target.value })}
             placeholder="https://chat.example.com/hooks/your-webhook-id"
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+        </div>
+      )
+    }
+
+    if (newChannelType === 'webhook') {
+      return (
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
+          <input
+            type="url"
+            value={newChannelConfig.webhook_url || ''}
+            onChange={(e) => setNewChannelConfig({ webhook_url: e.target.value })}
+            placeholder="https://hooks.example.com/alerts"
             className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             required
           />
@@ -322,7 +338,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
       )
     }
 
-    if (editingChannel.type === 'mattermost') {
+    if (editingChannel.type === 'mattermost' || editingChannel.type === 'webhook') {
       return (
         <div>
           <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
@@ -674,7 +690,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
                   Alert Channels
                 </h3>
                 <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                  Configure notification channels for alerts (SNS, Mattermost, Telegram).
+                  Configure notification channels for alerts (SNS, Mattermost, Webhook, Telegram).
                 </p>
               </div>
               <button
@@ -723,6 +739,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
                     >
                       <option value="sns">SNS Topic</option>
                       <option value="mattermost">Mattermost</option>
+                      <option value="webhook">Webhook</option>
                       <option value="telegram">Telegram</option>
                     </select>
                   </div>
@@ -774,6 +791,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
                           <div className="flex-shrink-0">
                             {channel.type === 'sns' && <Bell className="h-8 w-8 text-blue-500" />}
                             {channel.type === 'mattermost' && <MessageSquare className="h-8 w-8 text-purple-500" />}
+                            {channel.type === 'webhook' && <Webhook className="h-8 w-8 text-indigo-500" />}
                             {channel.type === 'telegram' && <Send className="h-8 w-8 text-sky-500" />}
                           </div>
                           <div className="ml-4">

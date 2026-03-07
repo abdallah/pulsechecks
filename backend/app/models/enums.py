@@ -47,4 +47,5 @@ class AlertChannelType(str, Enum):
     
     SNS = "sns"
     MATTERMOST = "mattermost"
+    WEBHOOK = "webhook"
     TELEGRAM = "telegram"

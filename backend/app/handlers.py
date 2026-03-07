@@ -3,6 +3,7 @@ import asyncio
 import json
 from typing import Dict, Any
 import boto3
+import httpx
 from botocore.exceptions import ClientError
 
 from .db import create_db_client
@@ -220,6 +221,35 @@ async def _send_channel_alert(channel, check, team, sns_client, metrics, alert_t
             else:
                 success = await mattermost.send_late_alert(check, team.name)
             
+            metrics.alert_sent(check.team_id, check.check_id, f'late_channel_{channel.type.value}', success)
+            return success
+
+        elif channel.type == AlertChannelType.WEBHOOK:
+            webhook_url = channel.configuration.get('webhook_url')
+            if not webhook_url:
+                return False
+
+            payload = {
+                "event": alert_type,
+                "check": {
+                    "id": check.check_id,
+                    "name": check.name,
+                    "teamId": check.team_id,
+                    "status": check.status.value,
+                },
+                "team": {
+                    "id": team.team_id,
+                    "name": team.name,
+                },
+                "timestamp": get_iso_timestamp(),
+                "channelName": channel.display_name,
+            }
+
+            headers = channel.configuration.get('headers') or {}
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(webhook_url, json=payload, headers=headers)
+                success = 200 <= response.status_code < 300
+
             metrics.alert_sent(check.team_id, check.check_id, f'late_channel_{channel.type.value}', success)
             return success
             

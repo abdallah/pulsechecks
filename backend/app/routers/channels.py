@@ -219,16 +219,16 @@ def _validate_channel_configuration(channel_type: AlertChannelType, config: Dict
     if channel_type == AlertChannelType.SNS:
         # SNS channels will have topic_arn auto-created, no validation needed
         pass
-    elif channel_type == AlertChannelType.MATTERMOST:
+    elif channel_type in [AlertChannelType.MATTERMOST, AlertChannelType.WEBHOOK]:
         if "webhook_url" not in config:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Mattermost channels require 'webhook_url' in configuration"
+                detail=f"{channel_type.value.title()} channels require 'webhook_url' in configuration"
             )
         if not config["webhook_url"].startswith(("http://", "https://")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Mattermost webhook_url must start with http:// or https://"
+                detail=f"{channel_type.value.title()} webhook_url must start with http:// or https://"
             )
     elif channel_type == AlertChannelType.TELEGRAM:
         if "bot_token" not in config or "chat_id" not in config:

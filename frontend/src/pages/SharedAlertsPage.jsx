@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bell, Users, MessageSquare, Send, Plus, Settings, Trash2 } from 'lucide-react'
+import { ArrowLeft, Bell, Users, MessageSquare, Send, Plus, Settings, Trash2, Webhook } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 
@@ -14,7 +14,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
   const [newChannel, setNewChannel] = useState({
     name: '',
     displayName: '',
-    type: 'sns',
+    type: 'mattermost',
     configuration: {},
     shared: true
   })
@@ -76,7 +76,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
       setNewChannel({
         name: '',
         displayName: '',
-        type: 'sns',
+        type: 'mattermost',
         configuration: {},
         shared: true
       })
@@ -194,6 +194,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
                   >
                     <option value="sns">SNS Topic</option>
                     <option value="mattermost">Mattermost</option>
+                    <option value="webhook">Webhook</option>
                     <option value="telegram">Telegram</option>
                   </select>
                 </div>
@@ -209,6 +210,23 @@ export default function SharedAlertsPage({ user, onLogout }) {
                         configuration: { webhook_url: e.target.value }
                       }))}
                       placeholder="https://chat.example.com/hooks/shared-alerts"
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      required
+                    />
+                  </div>
+                )}
+
+                {newChannel.type === 'webhook' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
+                    <input
+                      type="url"
+                      value={newChannel.configuration.webhook_url || ''}
+                      onChange={(e) => setNewChannel(prev => ({
+                        ...prev,
+                        configuration: { webhook_url: e.target.value }
+                      }))}
+                      placeholder="https://hooks.example.com/shared-alerts"
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       required
                     />
@@ -253,6 +271,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
                       <div className="flex-shrink-0">
                         {channel.type === 'sns' && <Bell className="h-8 w-8 text-blue-500" />}
                         {channel.type === 'mattermost' && <MessageSquare className="h-8 w-8 text-purple-500" />}
+                        {channel.type === 'webhook' && <Webhook className="h-8 w-8 text-indigo-500" />}
                         {channel.type === 'telegram' && <Send className="h-8 w-8 text-sky-500" />}
                       </div>
                       <div className="ml-4">
@@ -304,7 +323,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
                     />
                   </div>
 
-                  {editingChannel.type === 'mattermost' && (
+                  {(editingChannel.type === 'mattermost' || editingChannel.type === 'webhook') && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
                       <input

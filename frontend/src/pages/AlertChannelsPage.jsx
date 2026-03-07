@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 
 const CHANNEL_TYPES = {
   sns: { name: 'SNS Topic', icon: Bell, color: 'blue' },
   mattermost: { name: 'Mattermost', icon: MessageSquare, color: 'purple' },
+  webhook: { name: 'Webhook', icon: Webhook, color: 'indigo' },
   telegram: { name: 'Telegram', icon: Send, color: 'sky' }
 }
 
@@ -19,7 +20,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
   const [newChannel, setNewChannel] = useState({
     name: '',
     displayName: '',
-    type: 'sns',
+    type: 'mattermost',
     configuration: {},
     shared: false
   })
@@ -48,7 +49,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
       setNewChannel({
         name: '',
         displayName: '',
-        type: 'sns',
+        type: 'mattermost',
         configuration: {},
         shared: false
       })
@@ -108,6 +109,22 @@ export default function AlertChannelsPage({ user, onLogout }) {
             value={newChannel.configuration.webhook_url || ''}
             onChange={(e) => handleConfigurationChange('webhook_url', e.target.value)}
             placeholder="https://chat.example.com/hooks/your-webhook-id"
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+        </div>
+      )
+    }
+
+    if (type === 'webhook') {
+      return (
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
+          <input
+            type="url"
+            value={newChannel.configuration.webhook_url || ''}
+            onChange={(e) => handleConfigurationChange('webhook_url', e.target.value)}
+            placeholder="https://hooks.example.com/alerts"
             className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             required
           />
@@ -226,6 +243,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
                   >
                     <option value="sns">SNS Topic</option>
                     <option value="mattermost">Mattermost</option>
+                    <option value="webhook">Webhook</option>
                     <option value="telegram">Telegram</option>
                   </select>
                 </div>

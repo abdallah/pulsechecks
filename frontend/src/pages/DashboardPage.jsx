@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Users, Grid3X3, List } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
+import { useToast } from '../components/Toast'
 
 export default function DashboardPage({ user, onLogout }) {
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showCreateTeam, setShowCreateTeam] = useState(false)
   const [newTeamName, setNewTeamName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -22,8 +25,10 @@ export default function DashboardPage({ user, onLogout }) {
       const data = await api.listTeams()
       // Backend returns array directly, not wrapped in {teams: [...]}
       setTeams(Array.isArray(data) ? data : data.teams || [])
+      setError(null)
     } catch (error) {
       console.error('Failed to load teams:', error)
+      setError('Failed to load teams. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -39,8 +44,9 @@ export default function DashboardPage({ user, onLogout }) {
       setTeams([...teams, team])
       setNewTeamName('')
       setShowCreateTeam(false)
+      toast.success('Team created successfully')
     } catch (error) {
-      alert('Failed to create team: ' + error.message)
+      toast.error('Failed to create team: ' + error.message)
     } finally {
       setCreating(false)
     }
@@ -135,6 +141,28 @@ export default function DashboardPage({ user, onLogout }) {
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 focus:ring-red-500 p-1.5 inline-flex h-8 w-8 text-red-500 hover:bg-red-100"
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
         ) : teams.length === 0 ? (
           <div className="text-center py-12 bg-white shadow sm:rounded-lg">

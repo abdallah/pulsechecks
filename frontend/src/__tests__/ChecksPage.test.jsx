@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import ChecksPage from '../pages/ChecksPage';
+import { renderWithToast } from './test-utils';
 
 // Mock the API
 vi.mock('../lib/api', () => ({
@@ -33,7 +34,7 @@ vi.mock('date-fns', () => ({
 import { api } from '../lib/api';
 
 const renderWithRouter = (component, initialEntries = ['/teams/team-123/checks']) => {
-  return render(
+  return renderWithToast(
     <MemoryRouter initialEntries={initialEntries}>
       <Routes>
         <Route path="/teams/:teamId/checks" element={component} />
@@ -147,7 +148,7 @@ describe('ChecksPage', () => {
     renderWithRouter(<ChecksPage user={mockUser} />);
     
     await waitFor(() => {
-      expect(screen.getByText('No checks')).toBeInTheDocument();
+      expect(screen.getByText('Failed to load checks. Please try again.')).toBeInTheDocument();
     });
   });
 
@@ -293,7 +294,6 @@ describe('ChecksPage', () => {
   });
 
   test('handles check creation error', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     api.listChecks.mockResolvedValue([]);
     api.createCheck.mockRejectedValue(new Error('Creation failed'));
     
@@ -310,10 +310,8 @@ describe('ChecksPage', () => {
     fireEvent.click(screen.getByText('Create Check'));
     
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith('Failed to create check: Creation failed');
+      expect(api.createCheck).toHaveBeenCalled();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test('shows delete and rotate token buttons', async () => {

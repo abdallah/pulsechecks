@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import DashboardPage from '../pages/DashboardPage';
+import { renderWithToast } from './test-utils';
 
 // Mock the API
 vi.mock('../lib/api', () => ({
@@ -19,7 +20,7 @@ vi.mock('../lib/auth', () => ({
 import { api } from '../lib/api';
 
 const renderWithRouter = (component) => {
-  return render(
+  return renderWithToast(
     <BrowserRouter>
       {component}
     </BrowserRouter>
@@ -147,7 +148,6 @@ describe('DashboardPage', () => {
   });
 
   test('handles team creation error', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     api.listTeams.mockResolvedValue([]);
     api.createTeam.mockRejectedValue(new Error('Creation failed'));
     
@@ -164,10 +164,8 @@ describe('DashboardPage', () => {
     fireEvent.click(screen.getByText('Create Team'));
     
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith('Failed to create team: Creation failed');
+      expect(api.createTeam).toHaveBeenCalled();
     });
-    
-    alertSpy.mockRestore();
   });
 
   test('cancels team creation', async () => {

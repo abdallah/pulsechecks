@@ -799,11 +799,24 @@ class DynamoDBClient(DatabaseInterface):
             )
 
     async def delete_alert_channel(self, team_id: str, channel_id: str) -> None:
-        """Delete an alert channel."""
+        """Delete an alert channel and remove it from all checks that reference it."""
         async with self._get_table() as table:
             await table.delete_item(
                 Key={"PK": f"TEAM#{team_id}", "SK": f"CHANNEL#{channel_id}"}
             )
+
+        # Cascade: remove channel_id from all checks in the team that reference it
+        checks = await self.list_team_checks(team_id)
+        for check in checks:
+            alert_channels = check.alert_channels or []
+            escalation_channels = check.escalation_alert_channels or []
+            if channel_id in alert_channels or channel_id in escalation_channels:
+                updates = {}
+                if channel_id in alert_channels:
+                    updates['alertChannels'] = [c for c in alert_channels if c != channel_id]
+                if channel_id in escalation_channels:
+                    updates['escalationAlertChannels'] = [c for c in escalation_channels if c != channel_id]
+                await self.update_check(team_id, check.check_id, updates)
 
     async def delete_team(self, team_id: str) -> None:
         """Delete a team and all associated data (cascade delete)."""

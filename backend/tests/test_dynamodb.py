@@ -637,3 +637,90 @@ class TestErrorHandling:
             
             # Should query for pings
             mock_table.query.assert_called_once()
+
+
+# ─────────────────────────────────────────────
+# Tests for cascade delete of alert channels
+# ─────────────────────────────────────────────
+
+@pytest.fixture
+def sample_alert_channel():
+    from app.models.entities import AlertChannel
+    from app.models.enums import AlertChannelType
+    return AlertChannel(
+        channel_id="channel-123",
+        team_id="team-123",
+        name="Test Channel",
+        type=AlertChannelType.WEBHOOK,
+        configuration={},
+        shared=False,
+        created_at="2023-01-01T00:00:00Z",
+    )
+
+
+@pytest.fixture
+def sample_checks_with_channel():
+    """Two checks: one referencing channel-123, one clean."""
+    return [
+        Check(
+            check_id="check-with-channel",
+            team_id="team-123",
+            name="Check With Channel",
+            token="token-1",
+            period_seconds=300,
+            grace_seconds=60,
+            status=CheckStatus.UP,
+            created_at="2023-01-01T00:00:00Z",
+            alert_channels=["channel-123", "other-channel"],
+            escalation_alert_channels=["channel-123"],
+        ),
+        Check(
+            check_id="check-without-channel",
+            team_id="team-123",
+            name="Check Without Channel",
+            token="token-2",
+            period_seconds=300,
+            grace_seconds=60,
+            status=CheckStatus.UP,
+            created_at="2023-01-01T00:00:00Z",
+            alert_channels=["other-channel"],
+            escalation_alert_channels=[],
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_delete_alert_channel_cascades_to_checks(
+    db_client, mock_table, sample_checks_with_channel
+):
+    """Deleting a channel should remove it from all checks that reference it."""
+    team_id = "team-123"
+    channel_id = "channel-123"
+
+    with patch.object(db_client, '_get_table') as mock_get_table, \
+         patch.object(db_client, 'list_team_checks', new_callable=AsyncMock) as mock_list, \
+         patch.object(db_client, 'update_check', new_callable=AsyncMock) as mock_update:
+
+        mock_get_table.return_value.__aenter__ = AsyncMock(return_value=mock_table)
+        mock_get_table.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_table.delete_item = AsyncMock()
+        mock_list.return_value = sample_checks_with_channel
+
+        await db_client.delete_alert_channel(team_id, channel_id)
+
+        # Channel document should be deleted
+        mock_table.delete_item.assert_called_once_with(
+            Key={"PK": f"TEAM#{team_id}", "SK": f"CHANNEL#{channel_id}"}
+        )
+
+        # update_check should be called once — only for check-with-channel
+        mock_update.assert_called_once()
+        call_args = mock_update.call_args
+        assert call_args[0][1] == "check-with-channel"
+        updates = call_args[0][2]
+        assert channel_id not in updates.get("alertChannels", [])
+        assert channel_id not in updates.get("escalationAlertChannels", [])
+        assert "other-channel" in updates.get("alertChannels", [])
+
+        # check-without-channel should NOT be updated
+        assert mock_update.call_count == 1

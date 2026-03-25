@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Copy, Pause, Play, Clock, Activity as ActivityIcon, Bell, Users } from 'lucide-react'
+import { ArrowLeft, Copy, Pause, Play, Clock, Activity as ActivityIcon, Bell, Users, CheckCircle } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { config } from '../config'
+import { useToast } from '../components/Toast'
 
 // Helper function to get the proper ping base URL (custom domain if available)
 function getPingBaseUrl() {
@@ -20,11 +21,13 @@ function getPingBaseUrl() {
 export default function CheckDetailPage({ user, onLogout }) {
   const { teamId, checkId } = useParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [check, setCheck] = useState(null)
   const [pings, setPings] = useState([])
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [selectedPing, setSelectedPing] = useState(null)
+  const [showTokenRotated, setShowTokenRotated] = useState(false)
   const [availableTopics, setAvailableTopics] = useState([])
   const [availableChannels, setAvailableChannels] = useState([])
   const [showAlertSettings, setShowAlertSettings] = useState(false)
@@ -172,9 +175,10 @@ export default function CheckDetailPage({ user, onLogout }) {
       // Update check with new token and ping URL
       updatedCheck.pingUrl = `${getPingBaseUrl()}/ping/${updatedCheck.token}`
       setCheck(updatedCheck)
-      alert('Token rotated successfully! Please update your monitoring scripts with the new ping URL.')
+      setShowTokenRotated(true)
+      toast.success('Token rotated successfully')
     } catch (error) {
-      alert('Failed to rotate token: ' + error.message)
+      toast.error('Failed to rotate token: ' + error.message)
     }
   }
 
@@ -541,6 +545,41 @@ curl -X POST ${check.pingUrl} \\
                   className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Token Rotated Modal */}
+      {showTokenRotated && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3 text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mt-4">Token Rotated</h3>
+              <div className="mt-2 px-7 py-3">
+                <p className="text-sm text-gray-500 mb-3">
+                  Your new ping URL is:
+                </p>
+                <div className="bg-gray-50 rounded-md p-3 mb-3">
+                  <code className="text-xs text-gray-700 break-all block">
+                    {check?.pingUrl}
+                  </code>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Please update your monitoring scripts with this new URL.
+                </p>
+              </div>
+              <div className="items-center px-4 py-3">
+                <button
+                  onClick={() => setShowTokenRotated(false)}
+                  className="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  Done
                 </button>
               </div>
             </div>

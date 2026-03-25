@@ -4,13 +4,17 @@ import { Plus, CheckCircle, AlertCircle, PauseCircle, ArrowLeft, Bell, MoreVerti
 import { formatDistanceToNow } from 'date-fns'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
+import { config } from '../config'
+import { useToast } from '../components/Toast'
 
 export default function ChecksPage({ user, onLogout }) {
   const { teamId } = useParams()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [checks, setChecks] = useState([])
   const [team, setTeam] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showCreateCheck, setShowCreateCheck] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -22,6 +26,7 @@ export default function ChecksPage({ user, onLogout }) {
   const [availableChannels, setAvailableChannels] = useState([])
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null)
   const [showRotateConfirm, setShowRotateConfirm] = useState(null)
+  const [showTokenRotated, setShowTokenRotated] = useState(null)
   const [actionLoading, setActionLoading] = useState(null)
   const [selectedChecks, setSelectedChecks] = useState(new Set())
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
@@ -55,8 +60,10 @@ export default function ChecksPage({ user, onLogout }) {
       const data = await api.listChecks(teamId)
       // Backend returns array directly, not wrapped in {checks: [...]}
       setChecks(Array.isArray(data) ? data : data.checks || [])
+      setError(null)
     } catch (error) {
       console.error('Failed to load checks:', error)
+      setError('Failed to load checks. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -115,8 +122,9 @@ export default function ChecksPage({ user, onLogout }) {
       setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [] })
       setShowCreateCheck(false)
       loadChecks()
+      toast.success('Check created successfully')
     } catch (error) {
-      alert('Failed to create check: ' + error.message)
+      toast.error('Failed to create check: ' + error.message)
     } finally {
       setCreating(false)
     }
@@ -128,8 +136,9 @@ export default function ChecksPage({ user, onLogout }) {
       await api.deleteCheck(teamId, checkId)
       setShowDeleteConfirm(null)
       loadChecks()
+      toast.success('Check deleted successfully')
     } catch (error) {
-      alert('Failed to delete check: ' + error.message)
+      toast.error('Failed to delete check: ' + error.message)
     } finally {
       setActionLoading(null)
     }
@@ -138,12 +147,13 @@ export default function ChecksPage({ user, onLogout }) {
   async function handleRotateToken(checkId) {
     setActionLoading(checkId)
     try {
-      await api.rotateCheckToken(teamId, checkId)
+      const result = await api.rotateCheckToken(teamId, checkId)
       setShowRotateConfirm(null)
+      setShowTokenRotated(result)
+      toast.success('Token rotated successfully')
       loadChecks()
-      alert('Token rotated successfully. Please update your monitoring scripts with the new token.')
     } catch (error) {
-      alert('Failed to rotate token: ' + error.message)
+      toast.error('Failed to rotate token: ' + error.message)
     } finally {
       setActionLoading(null)
     }
@@ -173,11 +183,11 @@ export default function ChecksPage({ user, onLogout }) {
     setBulkActionLoading(true)
     try {
       const response = await api.bulkPauseChecks(teamId, Array.from(selectedChecks))
-      alert(response.message)
+      toast.success(response.message || 'Checks paused successfully')
       setSelectedChecks(new Set())
       loadChecks()
     } catch (error) {
-      alert('Failed to pause checks: ' + error.message)
+      toast.error('Failed to pause checks: ' + error.message)
     } finally {
       setBulkActionLoading(false)
     }
@@ -192,8 +202,9 @@ export default function ChecksPage({ user, onLogout }) {
         await api.pauseCheck(teamId, checkId)
       }
       loadChecks()
+      toast.success(`Check ${currentStatus === 'paused' ? 'resumed' : 'paused'} successfully`)
     } catch (error) {
-      alert(`Failed to ${currentStatus === 'paused' ? 'resume' : 'pause'} check: ` + error.message)
+      toast.error(`Failed to ${currentStatus === 'paused' ? 'resume' : 'pause'} check: ` + error.message)
     } finally {
       setActionLoading(null)
     }
@@ -215,8 +226,9 @@ export default function ChecksPage({ user, onLogout }) {
       await api.updateCheck(teamId, showQuickEdit, quickEditData)
       setShowQuickEdit(null)
       loadChecks()
+      toast.success('Check updated successfully')
     } catch (error) {
-      alert('Failed to update check: ' + error.message)
+      toast.error('Failed to update check: ' + error.message)
     } finally {
       setQuickEditLoading(false)
     }
@@ -416,6 +428,39 @@ export default function ChecksPage({ user, onLogout }) {
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto -mx-1.5 -my-1.5 rounded-lg focus:ring-2 focus:ring-red-500 p-1.5 inline-flex h-8 w-8 text-red-500 hover:bg-red-100"
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="mt-4">
+              <button
+                onClick={loadChecks}
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Retry
+              </button>
+            </div>
           </div>
         ) : checks.length === 0 ? (
           <div className="text-center py-12 bg-white shadow sm:rounded-lg">
@@ -645,6 +690,41 @@ export default function ChecksPage({ user, onLogout }) {
                   className="mt-3 px-4 py-2 bg-white text-gray-500 text-base font-medium rounded-md w-full shadow-sm border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
                 >
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Token Rotated Modal */}
+      {showTokenRotated && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3 text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mt-4">Token Rotated</h3>
+              <div className="mt-2 px-7 py-3">
+                <p className="text-sm text-gray-500 mb-3">
+                  Your new ping URL is:
+                </p>
+                <div className="bg-gray-50 rounded-md p-3 mb-3">
+                  <code className="text-xs text-gray-700 break-all block">
+                    {showTokenRotated.pingUrl || `${config.apiUrl}/ping/${showTokenRotated.token}`}
+                  </code>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Please update your monitoring scripts with this new URL.
+                </p>
+              </div>
+              <div className="items-center px-4 py-3">
+                <button
+                  onClick={() => setShowTokenRotated(null)}
+                  className="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  Done
                 </button>
               </div>
             </div>

@@ -10,6 +10,7 @@ import CheckDetailPage from './pages/CheckDetailPage'
 import TeamSettingsPage from './pages/TeamSettingsPage'
 import SharedAlertsPage from './pages/SharedAlertsPage'
 import AlertChannelsPage from './pages/AlertChannelsPage'
+import { ToastProvider } from './components/Toast'
 
 function App() {
   const [authenticated, setAuthenticated] = useState(isAuthenticated())
@@ -60,25 +61,27 @@ function App() {
   }
   
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-        <Route path="/callback" element={<CallbackPage onLogin={handleLogin} />} />
-        
-        {authenticated ? (
-          <>
-            <Route path="/" element={<DashboardPage user={user} onLogout={handleLogout} />} />
-            <Route path="/shared-alerts" element={<SharedAlertsPage user={user} onLogout={handleLogout} />} />
-            <Route path="/teams/:teamId/checks" element={<ChecksPage user={user} onLogout={handleLogout} />} />
-            <Route path="/teams/:teamId/checks/:checkId" element={<CheckDetailPage user={user} onLogout={handleLogout} />} />
-            <Route path="/teams/:teamId/settings" element={<TeamSettingsPage user={user} onLogout={handleLogout} />} />
-            <Route path="/teams/:teamId/channels" element={<AlertChannelsPage user={user} onLogout={handleLogout} />} />
-          </>
-        ) : (
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        )}
-      </Routes>
-    </BrowserRouter>
+    <ToastProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+          <Route path="/callback" element={<CallbackPage onLogin={handleLogin} />} />
+          
+          {authenticated ? (
+            <>
+              <Route path="/" element={<DashboardPage user={user} onLogout={handleLogout} />} />
+              <Route path="/shared-alerts" element={<SharedAlertsPage user={user} onLogout={handleLogout} />} />
+              <Route path="/teams/:teamId/checks" element={<ChecksPage user={user} onLogout={handleLogout} />} />
+              <Route path="/teams/:teamId/checks/:checkId" element={<CheckDetailPage user={user} onLogout={handleLogout} />} />
+              <Route path="/teams/:teamId/settings" element={<TeamSettingsPage user={user} onLogout={handleLogout} />} />
+              <Route path="/teams/:teamId/channels" element={<AlertChannelsPage user={user} onLogout={handleLogout} />} />
+            </>
+          ) : (
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          )}
+        </Routes>
+      </BrowserRouter>
+    </ToastProvider>
   )
 }
 

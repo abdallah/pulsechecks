@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Bell, Users, MessageSquare, Send, Plus, Settings, Trash2, Webhook } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
+import { useToast } from '../components/Toast'
 
 export default function SharedAlertsPage({ user, onLogout }) {
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [teams, setTeams] = useState([])
   const [sharedChannels, setSharedChannels] = useState([])
   const [loading, setLoading] = useState(true)
@@ -16,7 +18,8 @@ export default function SharedAlertsPage({ user, onLogout }) {
     displayName: '',
     type: 'mattermost',
     configuration: {},
-    shared: true
+    shared: true,
+    teamId: ''
   })
 
   useEffect(() => {
@@ -62,28 +65,23 @@ export default function SharedAlertsPage({ user, onLogout }) {
 
   async function handleCreateChannel(e) {
     e.preventDefault()
-    if (!newChannel.name.trim() || !newChannel.displayName.trim()) return
-
-    // Find user's first team to create the channel in
-    const userTeam = teams[0]
-    if (!userTeam) {
-      alert('No team available to create channel')
-      return
-    }
+    if (!newChannel.name.trim() || !newChannel.displayName.trim() || !newChannel.teamId) return
 
     try {
-      await api.createAlertChannel(userTeam.teamId, newChannel)
+      await api.createAlertChannel(newChannel.teamId, newChannel)
       setNewChannel({
         name: '',
         displayName: '',
         type: 'mattermost',
         configuration: {},
-        shared: true
+        shared: true,
+        teamId: ''
       })
       setShowAddChannel(false)
+      toast.success('Shared channel created successfully')
       loadSharedChannels()
     } catch (error) {
-      alert('Failed to create channel: ' + error.message)
+      toast.error('Failed to create channel: ' + error.message)
     }
   }
 
@@ -92,9 +90,10 @@ export default function SharedAlertsPage({ user, onLogout }) {
 
     try {
       await api.deleteAlertChannel(channel.teamId, channel.channelId)
+      toast.success('Channel deleted successfully')
       loadSharedChannels()
     } catch (error) {
-      alert('Failed to delete channel: ' + error.message)
+      toast.error('Failed to delete channel: ' + error.message)
     }
   }
 
@@ -110,9 +109,10 @@ export default function SharedAlertsPage({ user, onLogout }) {
       
       await api.updateAlertChannel(editingChannel.teamId, editingChannel.channelId, updateData)
       setEditingChannel(null)
+      toast.success('Channel updated successfully')
       loadSharedChannels()
     } catch (error) {
-      alert('Failed to update channel: ' + error.message)
+      toast.error('Failed to update channel: ' + error.message)
     }
   }
 
@@ -160,6 +160,24 @@ export default function SharedAlertsPage({ user, onLogout }) {
             <div className="px-4 py-5 sm:p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Create Shared Alert Channel</h3>
               <form onSubmit={handleCreateChannel} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Owning Team</label>
+                  <select
+                    value={newChannel.teamId}
+                    onChange={(e) => setNewChannel(prev => ({ ...prev, teamId: e.target.value }))}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    required
+                  >
+                    <option value="">Select a team...</option>
+                    {teams.map((team) => (
+                      <option key={team.teamId} value={team.teamId}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">The team that will own this shared channel</p>
+                </div>
+
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Channel Name</label>

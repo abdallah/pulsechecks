@@ -128,22 +128,22 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Set up OpenTofu
+        uses: opentofu/setup-opentofu@v1
         with:
-          terraform_version: 1.6.0
+          tofu_version: 1.9.0
 
-      - name: Terraform Init
+      - name: OpenTofu Init
         working-directory: infra/gcp
-        run: terraform init
+        run: tofu init
 
-      - name: Terraform Plan
+      - name: OpenTofu Plan
         working-directory: infra/gcp
-        run: terraform plan -out=tfplan
+        run: tofu plan -out=tfplan
 
-      - name: Terraform Apply
+      - name: OpenTofu Apply
         working-directory: infra/gcp
-        run: terraform apply -auto-approve tfplan
+        run: tofu apply -auto-approve tfplan
 
   deploy-cloudrun:
     name: Deploy Cloud Run Service

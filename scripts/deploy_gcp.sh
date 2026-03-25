@@ -51,8 +51,8 @@ if ! command -v gcloud &> /dev/null; then
     exit 1
 fi
 
-if ! command -v terraform &> /dev/null; then
-    print_error "Terraform is not installed"
+if ! command -v tofu &> /dev/null; then
+    print_error "OpenTofu is not installed"
     exit 1
 fi
 
@@ -97,22 +97,22 @@ echo ""
 # Deploy infrastructure
 print_header "2/4 - Deploying Infrastructure"
 cd "$PROJECT_ROOT/infra/gcp"
-print_info "Initializing Terraform..."
+print_info "Initializing OpenTofu..."
 if [ -n "$TF_HTTP_ADDRESS" ]; then
     print_info "Using HTTP backend (TF_HTTP_ADDRESS is set)"
-    terraform init
+    tofu init
 else
-    print_warning "TF_HTTP_ADDRESS is not set; using local Terraform state for this deployment"
-    terraform init -backend=false
+    print_warning "TF_HTTP_ADDRESS is not set; using local OpenTofu state for this deployment"
+    tofu init -backend=false
 fi
 
-print_info "Applying Terraform configuration..."
-terraform apply -auto-approve
+print_info "Applying OpenTofu configuration..."
+tofu apply -auto-approve
 
 # Get outputs
-CLOUDRUN_URL=$(terraform output -raw cloudrun_url)
-FIREBASE_WEB_API_KEY=$(terraform output -raw firebase_web_api_key)
-FIREBASE_AUTH_DOMAIN=$(terraform output -raw firebase_auth_domain)
+CLOUDRUN_URL=$(tofu output -raw cloudrun_url)
+FIREBASE_WEB_API_KEY=$(tofu output -raw firebase_web_api_key)
+FIREBASE_AUTH_DOMAIN=$(tofu output -raw firebase_auth_domain)
 print_info "Infrastructure deployed successfully"
 echo ""
 

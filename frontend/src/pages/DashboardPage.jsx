@@ -7,7 +7,7 @@ import { useToast } from '../components/Toast'
 
 export default function DashboardPage({ user, onLogout }) {
   const navigate = useNavigate()
-  const { toast } = useToast()
+  const toast = useToast()
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

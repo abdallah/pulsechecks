@@ -19,8 +19,15 @@ let toastId = 0
 
 const ToastContext = createContext()
 
+const noopToast = {
+  success: () => {},
+  error: () => {},
+  info: () => {},
+  show: () => {},
+}
+
 export function useToast() {
-  return useContext(ToastContext)
+  return useContext(ToastContext) ?? noopToast
 }
 
 export function ToastProvider({ children }) {

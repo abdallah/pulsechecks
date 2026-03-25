@@ -21,7 +21,7 @@ function getPingBaseUrl() {
 export default function CheckDetailPage({ user, onLogout }) {
   const { teamId, checkId } = useParams()
   const navigate = useNavigate()
-  const { toast } = useToast()
+  const toast = useToast()
   const [check, setCheck] = useState(null)
   const [pings, setPings] = useState([])
   const [loading, setLoading] = useState(true)

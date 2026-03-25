@@ -10,7 +10,7 @@ import { useToast } from '../components/Toast'
 export default function ChecksPage({ user, onLogout }) {
   const { teamId } = useParams()
   const navigate = useNavigate()
-  const { toast } = useToast()
+  const toast = useToast()
   const [checks, setChecks] = useState([])
   const [team, setTeam] = useState(null)
   const [loading, setLoading] = useState(true)

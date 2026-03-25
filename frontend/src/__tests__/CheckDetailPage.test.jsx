@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import CheckDetailPage from '../pages/CheckDetailPage'
 import { api } from '../lib/api'
+import { renderWithToast } from './test-utils'
 
 // Mock the API
 vi.mock('../lib/api', () => ({
@@ -77,7 +78,7 @@ describe('CheckDetailPage', () => {
   })
 
   const renderCheckDetailPage = () => {
-    return render(
+    return renderWithToast(
       <MemoryRouter initialEntries={['/teams/team-123/checks/check-123']}>
         <CheckDetailPage user={mockUser} onLogout={vi.fn()} />
       </MemoryRouter>

@@ -717,10 +717,29 @@ class FirestoreClient(DatabaseInterface):
         })
 
     async def delete_alert_channel(self, team_id: str, channel_id: str) -> None:
-        """Delete an alert channel."""
+        """Delete an alert channel and remove it from all checks that reference it."""
+        from google.cloud import firestore
+
+        # Delete the channel document
         doc_ref = (self.db.collection('teams').document(team_id)
                    .collection('channels').document(channel_id))
         await doc_ref.delete()
+
+        # Cascade: remove channel_id from all checks in the team that reference it
+        checks_ref = (self.db.collection('teams').document(team_id)
+                      .collection('checks'))
+        checks_stream = checks_ref.stream()
+        async for check_doc in checks_stream:
+            data = check_doc.to_dict()
+            alert_channels = data.get('alertChannels', [])
+            escalation_channels = data.get('escalationAlertChannels', [])
+            if channel_id in alert_channels or channel_id in escalation_channels:
+                update = {}
+                if channel_id in alert_channels:
+                    update['alertChannels'] = firestore.ArrayRemove([channel_id])
+                if channel_id in escalation_channels:
+                    update['escalationAlertChannels'] = firestore.ArrayRemove([channel_id])
+                await check_doc.reference.update(update)
 
     # Helper methods
     @staticmethod

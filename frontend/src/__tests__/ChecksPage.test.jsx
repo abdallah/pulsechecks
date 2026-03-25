@@ -8,6 +8,7 @@ import { renderWithToast } from './test-utils';
 vi.mock('../lib/api', () => ({
   api: {
     getTeam: vi.fn(),
+    listTeams: vi.fn(),
     listChecks: vi.fn(),
     listAlertChannels: vi.fn(),
     createCheck: vi.fn(),
@@ -54,6 +55,7 @@ describe('ChecksPage', () => {
     vi.clearAllMocks();
     // Default mocks
     api.getTeam.mockResolvedValue({ teamId: 'team-123', name: 'Test Team' });
+    api.listTeams.mockResolvedValue([{ teamId: 'team-123', name: 'Test Team' }]);
     api.listAlertChannels.mockResolvedValue([]);
   });
 

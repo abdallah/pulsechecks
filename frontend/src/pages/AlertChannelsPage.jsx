@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook, PlayCircle } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
+import { useToast } from '../components/Toast'
 
 const CHANNEL_TYPES = {
   sns: { name: 'SNS Topic', icon: Bell, color: 'blue' },
@@ -14,8 +15,10 @@ const CHANNEL_TYPES = {
 export default function AlertChannelsPage({ user, onLogout }) {
   const { teamId } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
   const [channels, setChannels] = useState([])
   const [loading, setLoading] = useState(true)
+  const [testingChannel, setTestingChannel] = useState(null)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [newChannel, setNewChannel] = useState({
     name: '',
@@ -68,6 +71,18 @@ export default function AlertChannelsPage({ user, onLogout }) {
       loadChannels()
     } catch (error) {
       alert('Failed to delete channel: ' + error.message)
+    }
+  }
+
+  async function handleTestChannel(channelId) {
+    setTestingChannel(channelId)
+    try {
+      await api.testAlertChannel(teamId, channelId)
+      toast.success('Test notification sent successfully')
+    } catch (error) {
+      toast.error('Test failed: ' + error.message)
+    } finally {
+      setTestingChannel(null)
     }
   }
 
@@ -320,6 +335,14 @@ export default function AlertChannelsPage({ user, onLogout }) {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleTestChannel(channel.channelId)}
+                          disabled={testingChannel === channel.channelId}
+                          className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                          title="Send test notification"
+                        >
+                          <PlayCircle className="h-4 w-4" />
+                        </button>
                         <button
                           onClick={() => navigate(`/teams/${teamId}/channels/${channel.channelId}`)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium"

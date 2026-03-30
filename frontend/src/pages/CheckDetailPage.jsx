@@ -338,6 +338,11 @@ export default function CheckDetailPage({ user, onLogout }) {
                 </dd>
               </div>
             </dl>
+            {check.graceSeconds > 2 * check.periodSeconds && (
+              <div className="mt-4 bg-amber-50 border border-amber-300 rounded-md p-3 text-sm text-amber-800">
+                ⚠️ Grace period is longer than 2× the check period — you may miss alerts
+              </div>
+            )}
           </div>
         </div>
 
@@ -455,9 +460,18 @@ export default function CheckDetailPage({ user, onLogout }) {
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
-                        <p className="text-sm text-gray-900">
-                          {formatDistanceToNow(new Date(ping.receivedAt), { addSuffix: true })}
-                        </p>
+                        <div className="flex items-center space-x-2">
+                          <p className="text-sm text-gray-900">
+                            {formatDistanceToNow(new Date(ping.receivedAt), { addSuffix: true })}
+                          </p>
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                            ping.ping_type === 'fail' ? 'bg-red-100 text-red-800' :
+                            ping.ping_type === 'start' ? 'bg-blue-100 text-blue-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {ping.ping_type}
+                          </span>
+                        </div>
                         {ping.data && (
                           <p className="mt-1 text-xs text-gray-500 font-mono">{ping.data}</p>
                         )}
@@ -476,13 +490,19 @@ export default function CheckDetailPage({ user, onLogout }) {
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
           <h4 className="text-sm font-medium text-blue-900 mb-2">Usage Example</h4>
           <pre className="text-xs text-blue-800 bg-white p-3 rounded border border-blue-200 overflow-x-auto">
-            {`# Simple ping
+            {`# Simple ping (success)
 curl ${check.pingUrl}
 
 # With data
 curl -X POST ${check.pingUrl} \\
   -H "Content-Type: application/json" \\
-  -d "{\\"data\\": \\"Backup completed: 1.2GB\\"}"`}
+  -d "{\\"data\\": \\"Backup completed: 1.2GB\\"}"
+
+# Record failure
+curl -X POST ${check.pingUrl}/fail
+
+# Record job start
+curl ${check.pingUrl}/start`}
           </pre>
         </div>
       </div>

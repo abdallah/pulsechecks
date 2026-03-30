@@ -214,6 +214,100 @@ async def delete_alert_channel(
     return {"message": "Alert channel deleted successfully"}
 
 
+@router.post("/{channel_id}/test")
+async def test_alert_channel(
+    team_id: str,
+    channel_id: str,
+    current_user: AuthUser,
+    db: Database,
+) -> Dict[str, str]:
+    """Send a test notification through an alert channel."""
+    await check_team_access(team_id, current_user, db, Permission.EDIT)
+
+    channel = await db.get_alert_channel(team_id, channel_id)
+    if not channel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert channel not found"
+        )
+
+    try:
+        await _send_test_notification(channel, team_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Test notification failed: {str(e)}"
+        )
+
+    return {"message": "Test notification sent successfully"}
+
+
+async def _send_test_notification(channel: "AlertChannel", team_id: str) -> None:
+    """Send a test notification through the given channel."""
+    import json
+    import httpx
+    from ..integrations.mattermost import create_mattermost_client
+    from ..utils import get_iso_timestamp
+
+    if channel.type == AlertChannelType.SNS:
+        topic_arn = channel.configuration.get("topic_arn")
+        if not topic_arn:
+            raise ValueError("SNS topic ARN not configured")
+        sns = _get_sns_client()
+        sns.publish(
+            TopicArn=topic_arn,
+            Subject="🔔 PulseChecks Test Notification",
+            Message=json.dumps({
+                "event": "test",
+                "channelName": channel.display_name,
+                "teamId": team_id,
+                "timestamp": get_iso_timestamp(),
+            }, indent=2),
+        )
+
+    elif channel.type == AlertChannelType.MATTERMOST:
+        webhook_url = channel.configuration.get("webhook_url")
+        if not webhook_url:
+            raise ValueError("Webhook URL not configured")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(webhook_url, json={
+                "text": f"🔔 **PulseChecks Test** — channel *{channel.display_name}* is working!"
+            })
+            if resp.status_code >= 400:
+                raise ValueError(f"Mattermost returned HTTP {resp.status_code}")
+
+    elif channel.type == AlertChannelType.WEBHOOK:
+        webhook_url = channel.configuration.get("webhook_url")
+        if not webhook_url:
+            raise ValueError("Webhook URL not configured")
+        headers = channel.configuration.get("headers") or {}
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(webhook_url, json={
+                "event": "test",
+                "channelName": channel.display_name,
+                "teamId": team_id,
+                "timestamp": get_iso_timestamp(),
+            }, headers=headers)
+            if resp.status_code >= 400:
+                raise ValueError(f"Webhook returned HTTP {resp.status_code}")
+
+    elif channel.type == AlertChannelType.TELEGRAM:
+        bot_token = channel.configuration.get("bot_token")
+        chat_id = channel.configuration.get("chat_id")
+        if not bot_token or not chat_id:
+            raise ValueError("Telegram bot_token and chat_id required")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={"chat_id": chat_id, "text": f"🔔 PulseChecks Test — channel {channel.display_name} is working!"},
+            )
+            if resp.status_code >= 400:
+                raise ValueError(f"Telegram returned HTTP {resp.status_code}")
+
+    else:
+        raise ValueError(f"Unsupported channel type: {channel.type.value}")
+
+
 def _validate_channel_configuration(channel_type: AlertChannelType, config: Dict[str, Any]) -> None:
     """Validate channel configuration based on type."""
     if channel_type == AlertChannelType.SNS:

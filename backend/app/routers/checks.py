@@ -18,6 +18,7 @@ from ..models import (
     OkResponse,
     Check,
     CheckStatus,
+    CheckType,
     Permission,
     Role,
 )
@@ -31,6 +32,34 @@ from ..utils import (
 )
 
 router = APIRouter(prefix="/teams/{team_id}/checks", tags=["checks"])
+
+
+def _check_detail_response(check) -> CheckDetailResponse:
+    """Build a CheckDetailResponse from a Check entity."""
+    return CheckDetailResponse(
+        checkId=check.check_id,
+        teamId=check.team_id,
+        name=check.name,
+        status=check.status,
+        periodSeconds=check.period_seconds,
+        graceSeconds=check.grace_seconds,
+        token=check.token,
+        lastPingAt=check.last_ping_at,
+        nextDueAt=check.next_due_at,
+        alertAfterAt=check.alert_after_at,
+        lastAlertAt=check.last_alert_at,
+        createdAt=check.created_at,
+        alertChannels=check.alert_channels,
+        escalationMinutes=check.escalation_minutes,
+        escalationTriggeredAt=getattr(check, 'escalation_triggered_at', None),
+        suppressAfterCount=getattr(check, 'suppress_after_count', None),
+        suppressDurationMinutes=getattr(check, 'suppress_duration_minutes', None),
+        consecutiveAlertCount=getattr(check, 'consecutive_alert_count', 0),
+        suppressedUntil=getattr(check, 'suppressed_until', None),
+        type=getattr(check, 'type', 'cron'),
+        url=getattr(check, 'url', None),
+        expectedStatusCode=getattr(check, 'expected_status_code', 200),
+    )
 
 
 # Bulk Operations (must be defined before individual check operations to avoid routing conflicts)
@@ -147,6 +176,9 @@ async def create_check(
         status=CheckStatus.PENDING,  # New checks start as pending
         created_at=get_iso_timestamp(),
         alert_channels=request.alert_channels,
+        type=request.type,
+        url=request.url,
+        expected_status_code=request.expected_status_code,
     )
     await db.create_check(check)
     
@@ -155,17 +187,7 @@ async def create_check(
     metrics.check_created(team_id)
     log_business_event('check_created', team_id=team_id, check_id=check_id, check_name=request.name)
 
-    return CheckDetailResponse(
-        checkId=check_id,
-        teamId=team_id,
-        name=request.name,
-        status=CheckStatus.PENDING,  # New checks start as pending
-        periodSeconds=request.period_seconds,
-        graceSeconds=request.grace_seconds,
-        token=token,
-        createdAt=check.created_at,
-        alertChannels=request.alert_channels,
-    )
+    return _check_detail_response(check)
 
 
 @router.get("", response_model=List[CheckResponse])
@@ -191,6 +213,9 @@ async def list_team_checks(
             lastPingAt=check.last_ping_at,
             nextDueAt=check.next_due_at,
             createdAt=check.created_at,
+            type=check.type,
+            url=check.url,
+            expectedStatusCode=check.expected_status_code,
         )
         for check in checks
     ]
@@ -212,27 +237,7 @@ async def get_check_detail(
     if not check:
         raise NotFoundError("Check not found")
 
-    return CheckDetailResponse(
-        checkId=check.check_id,
-        teamId=check.team_id,
-        name=check.name,
-        status=check.status,
-        periodSeconds=check.period_seconds,
-        graceSeconds=check.grace_seconds,
-        token=check.token,
-        lastPingAt=check.last_ping_at,
-        nextDueAt=check.next_due_at,
-        alertAfterAt=check.alert_after_at,
-        lastAlertAt=check.last_alert_at,
-        createdAt=check.created_at,
-        alertChannels=check.alert_channels,
-        escalationMinutes=check.escalation_minutes,
-        escalationTriggeredAt=getattr(check, 'escalation_triggered_at', None),
-        suppressAfterCount=getattr(check, 'suppress_after_count', None),
-        suppressDurationMinutes=getattr(check, 'suppress_duration_minutes', None),
-        consecutiveAlertCount=getattr(check, 'consecutive_alert_count', 0),
-        suppressedUntil=getattr(check, 'suppressed_until', None),
-    )
+    return _check_detail_response(check)
 
 
 @router.patch("/{check_id}", response_model=CheckDetailResponse)
@@ -268,31 +273,14 @@ async def update_check(
         updates["suppressAfterCount"] = request.suppress_after_count
     if request.suppress_duration_minutes is not None:
         updates["suppressDurationMinutes"] = request.suppress_duration_minutes
+    if request.url is not None:
+        updates["url"] = request.url
+    if request.expected_status_code is not None:
+        updates["expectedStatusCode"] = request.expected_status_code
 
     if not updates:
         # No updates provided, return current check
-        return CheckDetailResponse(
-            checkId=check.check_id,
-            teamId=check.team_id,
-            name=check.name,
-            status=check.status,
-            periodSeconds=check.period_seconds,
-            graceSeconds=check.grace_seconds,
-            token=check.token,
-            lastPingAt=check.last_ping_at,
-            nextDueAt=check.next_due_at,
-            alertAfterAt=check.alert_after_at,
-            lastAlertAt=check.last_alert_at,
-            createdAt=check.created_at,
-            alertChannels=check.alert_channels,
-            escalationMinutes=check.escalation_minutes,
-            escalationAlertChannels=check.escalation_alert_channels,
-            escalationTriggeredAt=getattr(check, 'escalation_triggered_at', None),
-            suppressAfterCount=getattr(check, 'suppress_after_count', None),
-            suppressDurationMinutes=getattr(check, 'suppress_duration_minutes', None),
-            consecutiveAlertCount=getattr(check, 'consecutive_alert_count', 0),
-            suppressedUntil=getattr(check, 'suppressed_until', None),
-        )
+        return _check_detail_response(check)
 
     # Recalculate alert time if period or grace changed
     if ("periodSeconds" in updates or "graceSeconds" in updates) and check.last_ping_at:
@@ -309,27 +297,7 @@ async def update_check(
     # Perform update
     updated_check = await db.update_check(team_id, check_id, updates)
 
-    return CheckDetailResponse(
-        checkId=updated_check.check_id,
-        teamId=updated_check.team_id,
-        name=updated_check.name,
-        status=updated_check.status,
-        periodSeconds=updated_check.period_seconds,
-        graceSeconds=updated_check.grace_seconds,
-        token=updated_check.token,
-        lastPingAt=updated_check.last_ping_at,
-        nextDueAt=updated_check.next_due_at,
-        alertAfterAt=updated_check.alert_after_at,
-        lastAlertAt=updated_check.last_alert_at,
-        createdAt=updated_check.created_at,
-        alertChannels=updated_check.alert_channels,
-        escalationMinutes=updated_check.escalation_minutes,
-        escalationTriggeredAt=getattr(updated_check, 'escalation_triggered_at', None),
-        suppressAfterCount=getattr(updated_check, 'suppress_after_count', None),
-        suppressDurationMinutes=getattr(updated_check, 'suppress_duration_minutes', None),
-        consecutiveAlertCount=getattr(updated_check, 'consecutive_alert_count', 0),
-        suppressedUntil=getattr(updated_check, 'suppressed_until', None),
-    )
+    return _check_detail_response(updated_check)
 
 
 @router.post("/{check_id}/pause", response_model=OkResponse)
@@ -399,27 +367,7 @@ async def rotate_check_token(
     updates = {"token": new_token}
     updated_check = await db.update_check(team_id, check_id, updates)
 
-    return CheckDetailResponse(
-        checkId=updated_check.check_id,
-        teamId=updated_check.team_id,
-        name=updated_check.name,
-        status=updated_check.status,
-        periodSeconds=updated_check.period_seconds,
-        graceSeconds=updated_check.grace_seconds,
-        token=updated_check.token,
-        lastPingAt=updated_check.last_ping_at,
-        nextDueAt=updated_check.next_due_at,
-        alertAfterAt=updated_check.alert_after_at,
-        lastAlertAt=updated_check.last_alert_at,
-        createdAt=updated_check.created_at,
-        alertChannels=updated_check.alert_channels,
-        escalationMinutes=updated_check.escalation_minutes,
-        escalationTriggeredAt=getattr(updated_check, 'escalation_triggered_at', None),
-        suppressAfterCount=getattr(updated_check, 'suppress_after_count', None),
-        suppressDurationMinutes=getattr(updated_check, 'suppress_duration_minutes', None),
-        consecutiveAlertCount=getattr(updated_check, 'consecutive_alert_count', 0),
-        suppressedUntil=getattr(updated_check, 'suppressed_until', None),
-    )
+    return _check_detail_response(updated_check)
 
 
 @router.post("/{check_id}/escalate", response_model=OkResponse)
@@ -513,21 +461,7 @@ async def rotate_check_token(
     # Update check with new token
     updated_check = await db.update_check(team_id, check_id, {"token": new_token})
 
-    return CheckDetailResponse(
-        checkId=updated_check.check_id,
-        teamId=updated_check.team_id,
-        name=updated_check.name,
-        status=updated_check.status,
-        periodSeconds=updated_check.period_seconds,
-        graceSeconds=updated_check.grace_seconds,
-        token=updated_check.token,
-        lastPingAt=updated_check.last_ping_at,
-        nextDueAt=updated_check.next_due_at,
-        alertAfterAt=updated_check.alert_after_at,
-        lastAlertAt=updated_check.last_alert_at,
-        createdAt=updated_check.created_at,
-        alertChannels=updated_check.alert_channels,
-    )
+    return _check_detail_response(updated_check)
 
 
 @router.delete("/{check_id}", response_model=OkResponse)

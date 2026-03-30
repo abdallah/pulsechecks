@@ -33,6 +33,9 @@ class CreateCheckRequest(BaseModel):
         alias="graceSeconds"
     )
     alert_channels: list[str] = Field(default_factory=list, description="List of alert channel IDs to notify")
+    type: str = Field(default="cron", description="Check type: cron or http")
+    url: Optional[str] = Field(None, max_length=2048, description="Target URL for http checks")
+    expected_status_code: int = Field(default=200, ge=100, le=599, alias="expectedStatusCode", description="Expected HTTP status code")
 
     @field_validator("name")
     @classmethod
@@ -40,6 +43,13 @@ class CreateCheckRequest(BaseModel):
         if not v.strip():
             raise ValueError("name cannot be empty or whitespace")
         return v.strip()
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        if v not in ("cron", "http"):
+            raise ValueError("type must be 'cron' or 'http'")
+        return v
 
     @field_validator("alert_channels")
     @classmethod
@@ -53,6 +63,10 @@ class CreateCheckRequest(BaseModel):
         """Ensure grace period is reasonable relative to check period."""
         if self.grace_seconds > self.period_seconds:
             raise ValueError("grace_seconds cannot exceed period_seconds")
+        if self.type == "http" and not self.url:
+            raise ValueError("url is required for http checks")
+        if self.type == "http" and self.url and not self.url.startswith(("http://", "https://")):
+            raise ValueError("url must start with http:// or https://")
         return self
 
 
@@ -63,6 +77,8 @@ class UpdateCheckRequest(BaseModel):
     period_seconds: Optional[int] = Field(None, ge=60, le=31536000, alias="periodSeconds")
     grace_seconds: Optional[int] = Field(None, ge=0, le=86400, alias="graceSeconds")
     alert_channels: Optional[list[str]] = Field(None, alias="alertChannels", description="List of alert channel IDs to notify")
+    url: Optional[str] = Field(None, max_length=2048, description="Target URL for http checks")
+    expected_status_code: Optional[int] = Field(None, ge=100, le=599, alias="expectedStatusCode", description="Expected HTTP status code")
     
     # Escalation configuration
     escalation_minutes: Optional[int] = Field(None, ge=1, le=1440, alias="escalationMinutes", description="Minutes before escalating")

@@ -16,6 +16,7 @@ from .errors import (
     generic_error_handler,
 )
 from .logging_config import setup_logging
+from .scheduler import start_scheduler, stop_scheduler
 
 # Setup structured logging
 setup_logging()
@@ -61,6 +62,15 @@ app.add_exception_handler(Exception, generic_error_handler)
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
+
+# Lifecycle events for HTTP poller
+@app.on_event("startup")
+async def on_startup():
+    start_scheduler()
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    stop_scheduler()
 
 # Include routers
 app.include_router(users_router)

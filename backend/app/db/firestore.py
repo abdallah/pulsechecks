@@ -312,6 +312,9 @@ class FirestoreClient(DatabaseInterface):
             'alertChannels': check.alert_channels or [],
             'escalationMinutes': check.escalation_minutes,
             'escalationAlertChannels': check.escalation_alert_channels or [],
+            'type': check.type if isinstance(check.type, str) else check.type.value,
+            'url': check.url,
+            'expectedStatusCode': check.expected_status_code,
         }
 
         # Remove None values
@@ -584,6 +587,18 @@ class FirestoreClient(DatabaseInterface):
 
         return checks
 
+    async def list_all_http_checks(self) -> List[Check]:
+        """List all active HTTP checks (type=http, status != paused)."""
+        checks_ref = self.db.collection('checks')
+        query = checks_ref.where('type', '==', 'http')
+        checks = []
+        async for doc in query.stream():
+            data = doc.to_dict()
+            check = self._dict_to_check(data)
+            if check.status != CheckStatus.PAUSED.value:
+                checks.append(check)
+        return checks
+
     # Pending invitation operations
     async def create_pending_invitation(self, invitation: PendingInvitation) -> None:
         """Create a pending invitation for a user."""
@@ -764,4 +779,7 @@ class FirestoreClient(DatabaseInterface):
             consecutive_alert_count=int(data.get('consecutiveAlertCount', 0)),
             suppressed_until=data.get('suppressedUntil'),
             escalation_triggered_at=data.get('escalationTriggeredAt'),
+            type=data.get('type', 'cron'),
+            url=data.get('url'),
+            expected_status_code=int(data.get('expectedStatusCode', 200)),
         )

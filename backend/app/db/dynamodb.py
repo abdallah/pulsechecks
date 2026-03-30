@@ -230,6 +230,14 @@ class DynamoDBClient(DatabaseInterface):
             if check.alert_channels:
                 item["alertChannels"] = check.alert_channels
 
+            # HTTP check fields
+            if check.type != "cron":
+                item["type"] = check.type if isinstance(check.type, str) else check.type.value
+            if check.url:
+                item["url"] = check.url
+            if check.expected_status_code != 200:
+                item["expectedStatusCode"] = check.expected_status_code
+
             # Add to token index
             item["GSI2PK"] = f"TOKEN#{check.token}"
             item["GSI2SK"] = "CHECK"
@@ -541,7 +549,21 @@ class DynamoDBClient(DatabaseInterface):
             alert_channels=item.get("alertChannels", []),
             escalation_minutes=convert_to_int(item.get("escalationMinutes")) if item.get("escalationMinutes") else None,
             escalation_alert_channels=item.get("escalationAlertChannels", []),
+            type=item.get("type", "cron"),
+            url=item.get("url"),
+            expected_status_code=convert_to_int(item.get("expectedStatusCode")) or 200,
         )
+
+    async def list_all_http_checks(self) -> List[Check]:
+        """List all active HTTP checks (type=http, status != paused)."""
+        async with self._get_table() as table:
+            response = await table.scan(
+                FilterExpression="attribute_exists(#type) AND #type = :http AND #status <> :paused",
+                ExpressionAttributeNames={"#type": "type", "#status": "status"},
+                ExpressionAttributeValues={":http": "http", ":paused": "paused"},
+            )
+            items = response.get("Items", [])
+            return [self._item_to_check(item) for item in items if "checkId" in item]
 
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """Get a user by email (scan-based for MVP)."""

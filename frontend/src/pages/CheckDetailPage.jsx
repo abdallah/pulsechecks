@@ -284,6 +284,7 @@ export default function CheckDetailPage({ user, onLogout }) {
           </div>
           <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
             <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+              {check.type !== 'http' && (
               <div className="sm:col-span-2">
                 <dt className="text-sm font-medium text-gray-500">Ping URL</dt>
                 <dd className="mt-1 flex items-center space-x-2">
@@ -307,6 +308,16 @@ export default function CheckDetailPage({ user, onLogout }) {
                 </dd>
                 {copied && <p className="mt-1 text-xs text-green-600">Copied!</p>}
               </div>
+              )}
+
+              {check.type === 'http' && (
+              <div className="sm:col-span-2">
+                <dt className="text-sm font-medium text-gray-500">Monitored URL</dt>
+                <dd className="mt-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200 overflow-x-auto">
+                  {check.url} <span className="text-gray-500">(expecting {check.expectedStatusCode || 200})</span>
+                </dd>
+              </div>
+              )}
 
               <div>
                 <dt className="text-sm font-medium text-gray-500 flex items-center">
@@ -325,7 +336,7 @@ export default function CheckDetailPage({ user, onLogout }) {
               </div>
 
               <div>
-                <dt className="text-sm font-medium text-gray-500">Last Ping</dt>
+                <dt className="text-sm font-medium text-gray-500">{check.type === 'http' ? 'Last Checked' : 'Last Ping'}</dt>
                 <dd className="mt-1 text-sm text-gray-900">
                   {check.lastPingAt ? formatDistanceToNow(new Date(check.lastPingAt), { addSuffix: true }) : 'Never'}
                 </dd>
@@ -487,6 +498,7 @@ export default function CheckDetailPage({ user, onLogout }) {
           </div>
         </div>
 
+        {check.type !== 'http' && (
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
           <h4 className="text-sm font-medium text-blue-900 mb-2">Usage Example</h4>
           <pre className="text-xs text-blue-800 bg-white p-3 rounded border border-blue-200 overflow-x-auto">
@@ -505,6 +517,7 @@ curl -X POST ${check.pingUrl}/fail
 curl ${check.pingUrl}/start`}
           </pre>
         </div>
+        )}
       </div>
 
       {/* Ping Detail Modal */}

@@ -80,12 +80,22 @@ async def _record_ping_internal(
     )
 
     new_status = CheckStatus.UP.value if ping_type == PingType.SUCCESS else CheckStatus.LATE.value
-    
+
+    # Failure threshold: only go LATE if consecutive failures >= threshold
+    failure_threshold = getattr(check, 'failure_threshold', 1) or 1
+    consecutive = getattr(check, 'consecutive_failure_count', 0) or 0
+
+    if ping_type == PingType.FAIL:
+        consecutive += 1
+        if consecutive < failure_threshold:
+            new_status = check.status if check.status != CheckStatus.PAUSED.value else CheckStatus.UP.value
+
     updates = {
         "lastPingAt": timestamp,
         "nextDueAt": next_due,
         "alertAfterAt": alert_after,
         "status": new_status,
+        "consecutiveFailureCount": 0 if ping_type == PingType.SUCCESS else consecutive,
     }
 
     # Conditional update - only if not paused

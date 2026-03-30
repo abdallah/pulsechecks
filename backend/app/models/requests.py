@@ -36,6 +36,8 @@ class CreateCheckRequest(BaseModel):
     type: str = Field(default="cron", description="Check type: cron or http")
     url: Optional[str] = Field(None, max_length=2048, description="Target URL for http checks")
     expected_status_code: int = Field(default=200, ge=100, le=599, alias="expectedStatusCode", description="Expected HTTP status code")
+    expected_string: Optional[str] = Field(None, max_length=1000, alias="expectedString", description="Expected string in response body")
+    failure_threshold: int = Field(default=1, ge=1, le=100, alias="failureThreshold", description="Alert after N consecutive failures")
 
     @field_validator("name")
     @classmethod
@@ -79,6 +81,8 @@ class UpdateCheckRequest(BaseModel):
     alert_channels: Optional[list[str]] = Field(None, alias="alertChannels", description="List of alert channel IDs to notify")
     url: Optional[str] = Field(None, max_length=2048, description="Target URL for http checks")
     expected_status_code: Optional[int] = Field(None, ge=100, le=599, alias="expectedStatusCode", description="Expected HTTP status code")
+    expected_string: Optional[str] = Field(None, max_length=1000, alias="expectedString", description="Expected string in response body")
+    failure_threshold: Optional[int] = Field(None, ge=1, le=100, alias="failureThreshold", description="Alert after N consecutive failures")
     
     # Escalation configuration
     escalation_minutes: Optional[int] = Field(None, ge=1, le=1440, alias="escalationMinutes", description="Minutes before escalating")

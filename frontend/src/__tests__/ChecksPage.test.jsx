@@ -188,7 +188,8 @@ describe('ChecksPage', () => {
         alertChannels: [],
         type: 'cron',
         url: '',
-        expectedStatusCode: 200
+        expectedStatusCode: 200,
+        failureThreshold: 1
       });
     });
   });

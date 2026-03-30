@@ -59,6 +59,8 @@ def _check_detail_response(check) -> CheckDetailResponse:
         type=getattr(check, 'type', 'cron'),
         url=getattr(check, 'url', None),
         expectedStatusCode=getattr(check, 'expected_status_code', 200),
+        expectedString=getattr(check, 'expected_string', None),
+        failureThreshold=getattr(check, 'failure_threshold', 1),
     )
 
 
@@ -179,6 +181,8 @@ async def create_check(
         type=request.type,
         url=request.url,
         expected_status_code=request.expected_status_code,
+        expected_string=request.expected_string,
+        failure_threshold=request.failure_threshold,
     )
     await db.create_check(check)
     
@@ -216,6 +220,8 @@ async def list_team_checks(
             type=check.type,
             url=check.url,
             expectedStatusCode=check.expected_status_code,
+            expectedString=getattr(check, 'expected_string', None),
+            failureThreshold=getattr(check, 'failure_threshold', 1),
         )
         for check in checks
     ]
@@ -277,6 +283,10 @@ async def update_check(
         updates["url"] = request.url
     if request.expected_status_code is not None:
         updates["expectedStatusCode"] = request.expected_status_code
+    if request.expected_string is not None:
+        updates["expectedString"] = request.expected_string
+    if request.failure_threshold is not None:
+        updates["failureThreshold"] = request.failure_threshold
 
     if not updates:
         # No updates provided, return current check

@@ -32,3 +32,37 @@ resource "google_cloud_scheduler_job" "late_detector" {
     google_cloud_run_service.pulsechecks_api,
   ]
 }
+
+# Cloud Scheduler job for HTTP polling (runs every minute)
+resource "google_cloud_scheduler_job" "http_poller" {
+  name             = "pulsechecks-http-poller-${var.environment}"
+  description      = "Trigger HTTP endpoint polling every minute"
+  schedule         = "* * * * *"
+  time_zone        = "UTC"
+  attempt_deadline = "60s"
+  region           = var.gcp_region
+  project          = var.gcp_project_id
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_service.pulsechecks_api.status[0].url}/internal/http-poll"
+
+    headers = {
+      "Content-Type" = "application/json"
+    }
+
+    oidc_token {
+      service_account_email = google_service_account.cloudrun_sa.email
+      audience              = google_cloud_run_service.pulsechecks_api.status[0].url
+    }
+  }
+
+  depends_on = [
+    google_project_service.required_apis,
+    google_cloud_run_service.pulsechecks_api,
+  ]
+}

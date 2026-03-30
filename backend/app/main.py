@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from mangum import Mangum
 from botocore.exceptions import ClientError
 
-from .routers import users_router, teams_router, checks_router, ping_router, channels_router
+from .routers import users_router, teams_router, checks_router, ping_router, channels_router, internal_router
 from .config import get_settings
 from .middleware import rate_limit_middleware, error_handler_middleware, request_logging_middleware, correlation_id_middleware
 from .errors import (
@@ -16,7 +16,6 @@ from .errors import (
     generic_error_handler,
 )
 from .logging_config import setup_logging
-from .scheduler import start_scheduler, stop_scheduler
 
 # Setup structured logging
 setup_logging()
@@ -63,21 +62,13 @@ async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
 
-# Lifecycle events for HTTP poller
-@app.on_event("startup")
-async def on_startup():
-    start_scheduler()
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    stop_scheduler()
-
 # Include routers
 app.include_router(users_router)
 app.include_router(teams_router)
 app.include_router(checks_router)
 app.include_router(ping_router)
 app.include_router(channels_router)
+app.include_router(internal_router)
 
 # Lambda handler using Mangum
 # This handles API Gateway HTTP API and REST API events

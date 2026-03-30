@@ -50,6 +50,8 @@ class CheckResponse(BaseModel):
     type: str = Field(default="cron")
     url: Optional[str] = Field(None)
     expected_status_code: int = Field(default=200, alias="expectedStatusCode")
+    expected_string: Optional[str] = Field(None, alias="expectedString")
+    failure_threshold: int = Field(default=1, alias="failureThreshold")
 
 
 class CheckDetailResponse(CheckResponse):

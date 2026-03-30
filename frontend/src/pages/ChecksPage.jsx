@@ -24,6 +24,7 @@ export default function ChecksPage({ user, onLogout }) {
     type: 'cron',
     url: '',
     expectedStatusCode: 200,
+    failureThreshold: 1,
   })
   const [creating, setCreating] = useState(false)
   const [availableChannels, setAvailableChannels] = useState([])
@@ -122,7 +123,7 @@ export default function ChecksPage({ user, onLogout }) {
     setCreating(true)
     try {
       await api.createCheck(teamId, formData)
-      setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [], type: 'cron', url: '', expectedStatusCode: 200 })
+      setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [], type: 'cron', url: '', expectedStatusCode: 200, failureThreshold: 1 })
       setShowCreateCheck(false)
       loadChecks()
       toast.success('Check created successfully')
@@ -345,7 +346,7 @@ export default function ChecksPage({ user, onLogout }) {
                       name="checkType"
                       value="cron"
                       checked={formData.type === 'cron'}
-                      onChange={() => setFormData({ ...formData, type: 'cron', url: '', expectedStatusCode: 200 })}
+                      onChange={() => setFormData({ ...formData, type: 'cron', url: '', expectedStatusCode: 200, failureThreshold: 1 })}
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                     />
                     <span className="ml-2 text-sm text-gray-700">Cron Job</span>
@@ -393,6 +394,21 @@ export default function ChecksPage({ user, onLogout }) {
                       min="100"
                       max="599"
                     />
+                  </div>
+                  <div>
+                    <label htmlFor="failureThreshold" className="block text-sm font-medium text-gray-700">
+                      Alert after N consecutive failures
+                    </label>
+                    <input
+                      type="number"
+                      id="failureThreshold"
+                      value={formData.failureThreshold}
+                      onChange={(e) => setFormData({ ...formData, failureThreshold: parseInt(e.target.value) || 1 })}
+                      className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      min="1"
+                      max="100"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Default: 1 (alert on first failure)</p>
                   </div>
                 </div>
               )}

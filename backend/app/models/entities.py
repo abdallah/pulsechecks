@@ -83,6 +83,11 @@ class Check(BaseModel):
     type: CheckType = CheckType.CRON
     url: Optional[str] = None  # Target URL for http checks
     expected_status_code: int = 200
+    expected_string: Optional[str] = None  # Expected string in response body
+    
+    # Failure threshold for HTTP checks
+    failure_threshold: int = 1  # Alert after N consecutive failures
+    consecutive_failure_count: int = 0  # Current consecutive failure count
     
     # Escalation configuration
     escalation_minutes: Optional[int] = None  # Minutes before escalating

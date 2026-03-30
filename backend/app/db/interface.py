@@ -209,6 +209,11 @@ class DatabaseInterface(ABC):
         """Query checks that are due for late detection."""
         pass
 
+    @abstractmethod
+    async def list_all_http_checks(self) -> List[Check]:
+        """List all active HTTP checks (type=http, status != paused)."""
+        pass
+
     # Pending invitation operations
     @abstractmethod
     async def create_pending_invitation(self, invitation: PendingInvitation) -> None:

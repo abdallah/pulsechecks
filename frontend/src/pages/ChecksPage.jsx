@@ -21,6 +21,9 @@ export default function ChecksPage({ user, onLogout }) {
     periodSeconds: 60, // 1 minute in seconds
     graceSeconds: 300, // 5 minutes in seconds
     alertChannels: [], // Selected alert channel IDs
+    type: 'cron',
+    url: '',
+    expectedStatusCode: 200,
   })
   const [creating, setCreating] = useState(false)
   const [availableChannels, setAvailableChannels] = useState([])
@@ -119,7 +122,7 @@ export default function ChecksPage({ user, onLogout }) {
     setCreating(true)
     try {
       await api.createCheck(teamId, formData)
-      setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [] })
+      setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [], type: 'cron', url: '', expectedStatusCode: 200 })
       setShowCreateCheck(false)
       loadChecks()
       toast.success('Check created successfully')
@@ -331,6 +334,68 @@ export default function ChecksPage({ user, onLogout }) {
                   required
                 />
               </div>
+
+              {/* Check Type Toggle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Check Type</label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="checkType"
+                      value="cron"
+                      checked={formData.type === 'cron'}
+                      onChange={() => setFormData({ ...formData, type: 'cron', url: '', expectedStatusCode: 200 })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Cron Job</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="checkType"
+                      value="http"
+                      checked={formData.type === 'http'}
+                      onChange={() => setFormData({ ...formData, type: 'http' })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">HTTP Endpoint</span>
+                  </label>
+                </div>
+              </div>
+
+              {formData.type === 'http' && (
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="url" className="block text-sm font-medium text-gray-700">
+                      URL to Monitor
+                    </label>
+                    <input
+                      type="url"
+                      id="url"
+                      value={formData.url}
+                      onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="https://example.com/health"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="expectedStatusCode" className="block text-sm font-medium text-gray-700">
+                      Expected Status Code
+                    </label>
+                    <input
+                      type="number"
+                      id="expectedStatusCode"
+                      value={formData.expectedStatusCode}
+                      onChange={(e) => setFormData({ ...formData, expectedStatusCode: parseInt(e.target.value) || 200 })}
+                      className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      min="100"
+                      max="599"
+                    />
+                  </div>
+                </div>
+              )}
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -545,6 +610,11 @@ export default function ChecksPage({ user, onLogout }) {
                         >
                           {getStatusIcon(check.status)}
                           <p className="text-sm font-medium text-blue-600 truncate">{check.name}</p>
+                          {check.type === 'http' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                              HTTP
+                            </span>
+                          )}
                           {check.alertTopics && check.alertTopics.length > 0 && (
                             <div className="flex items-center">
                               <Bell className="h-4 w-4 text-orange-500" title={`${check.alertTopics.length} alert topic(s) configured`} />
@@ -622,7 +692,7 @@ export default function ChecksPage({ user, onLogout }) {
                       </div>
                       <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
                         {check.lastPingAt ? (
-                          <p>Last ping {formatDistanceToNow(new Date(check.lastPingAt), { addSuffix: true })}</p>
+                          <p>{check.type === 'http' ? 'Last checked' : 'Last ping'} {formatDistanceToNow(new Date(check.lastPingAt), { addSuffix: true })}</p>
                         ) : (
                           <p>No pings yet</p>
                         )}

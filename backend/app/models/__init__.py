@@ -1,5 +1,5 @@
 """Pydantic models for request/response validation."""
-from .enums import Role, CheckStatus, Permission, PingType, AlertChannelType
+from .enums import Role, CheckStatus, Permission, PingType, AlertChannelType, CheckType
 from .requests import (
     CreateTeamRequest,
     CreateCheckRequest,
@@ -26,6 +26,7 @@ __all__ = [
     "Permission",
     "PingType",
     "AlertChannelType",
+    "CheckType",
     # Requests
     "CreateTeamRequest",
     "CreateCheckRequest",

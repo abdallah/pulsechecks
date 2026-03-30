@@ -185,7 +185,10 @@ describe('ChecksPage', () => {
         name: 'My New Check',
         periodSeconds: 3600, // 60 minutes * 60 seconds
         graceSeconds: 300, // 5 minutes * 60 seconds
-        alertChannels: []
+        alertChannels: [],
+        type: 'cron',
+        url: '',
+        expectedStatusCode: 200
       });
     });
   });

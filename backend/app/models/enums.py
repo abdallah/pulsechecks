@@ -25,6 +25,13 @@ class Role(str, Enum):
         return False
 
 
+class CheckType(str, Enum):
+    """Check type values."""
+
+    CRON = "cron"
+    HTTP = "http"
+
+
 class CheckStatus(str, Enum):
     """Check status values."""
 

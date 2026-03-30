@@ -1,7 +1,7 @@
 """Internal entity models for database operations."""
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from .enums import Role, CheckStatus, AlertChannelType
+from .enums import Role, CheckStatus, CheckType, AlertChannelType
 
 
 class User(BaseModel):
@@ -78,6 +78,11 @@ class Check(BaseModel):
     last_alert_at: Optional[str] = None
     alert_channels: list[str] = []  # List of alert channel IDs
     mattermost_channels: list[str] = []  # List of Mattermost channel IDs (legacy)
+    
+    # Check type (cron or http)
+    type: CheckType = CheckType.CRON
+    url: Optional[str] = None  # Target URL for http checks
+    expected_status_code: int = 200
     
     # Escalation configuration
     escalation_minutes: Optional[int] = None  # Minutes before escalating

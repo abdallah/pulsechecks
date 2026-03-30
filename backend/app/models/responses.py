@@ -2,7 +2,7 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
-from .enums import Role, CheckStatus
+from .enums import Role, CheckStatus, CheckType
 
 
 class ErrorResponse(BaseModel):
@@ -47,6 +47,9 @@ class CheckResponse(BaseModel):
     next_due_at: Optional[str] = Field(None, alias="nextDueAt")
     created_at: str = Field(..., alias="createdAt")
     alert_channels: list[str] = Field(default_factory=list, alias="alertChannels")
+    type: str = Field(default="cron")
+    url: Optional[str] = Field(None)
+    expected_status_code: int = Field(default=200, alias="expectedStatusCode")
 
 
 class CheckDetailResponse(CheckResponse):

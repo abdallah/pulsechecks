@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Users, Plus, Trash2, Shield, Bell, Webhook, Settings, X, MessageSquare, Send } from 'lucide-react'
+import { ArrowLeft, Users, Plus, Trash2, Shield, Bell, Webhook, Settings, X, MessageSquare, Send, PlayCircle } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
+import { useToast } from '../components/Toast'
 
 export default function TeamSettingsPage({ user, onLogout }) {
   const { teamId } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
   const [activeTab, setActiveTab] = useState('members')
   const [team, setTeam] = useState(null)
   const [members, setMembers] = useState([])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [testingChannel, setTestingChannel] = useState(null)
   const [showAddMember, setShowAddMember] = useState(false)
   const [showAddAlert, setShowAddAlert] = useState(false)
   const [showTopicDetails, setShowTopicDetails] = useState(false)
@@ -221,6 +224,18 @@ export default function TeamSettingsPage({ user, onLogout }) {
       loadChannels()
     } catch (error) {
       alert('Failed to delete channel: ' + error.message)
+    }
+  }
+
+  async function handleTestChannel(channelId) {
+    setTestingChannel(channelId)
+    try {
+      await api.testAlertChannel(teamId, channelId)
+      toast.success('Test notification sent successfully')
+    } catch (error) {
+      toast.error('Test failed: ' + error.message)
+    } finally {
+      setTestingChannel(null)
     }
   }
 
@@ -814,6 +829,14 @@ export default function TeamSettingsPage({ user, onLogout }) {
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleTestChannel(channel.channelId)}
+                            disabled={testingChannel === channel.channelId}
+                            className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                            title="Send test notification"
+                          >
+                            <PlayCircle className="h-4 w-4" />
+                          </button>
                           <button
                             onClick={() => setEditingChannel(channel)}
                             className="text-blue-600 hover:text-blue-800"

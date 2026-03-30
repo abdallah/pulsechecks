@@ -365,6 +365,12 @@ export default function ChecksPage({ user, onLogout }) {
                   <p className="mt-1 text-xs text-gray-500">Extra time before alert</p>
                 </div>
               </div>
+
+              {formData.graceSeconds > 2 * formData.periodSeconds && (
+                <div className="bg-amber-50 border border-amber-300 rounded-md p-3 text-sm text-amber-800">
+                  ⚠️ Grace period is longer than 2× the check period — you may miss alerts
+                </div>
+              )}
               
               {/* Alert Channels Selection */}
               <div>
@@ -467,6 +473,10 @@ export default function ChecksPage({ user, onLogout }) {
             <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No checks</h3>
             <p className="mt-1 text-sm text-gray-500">Get started by creating a new check.</p>
+            <div className="mt-4 mx-auto max-w-md bg-blue-50 border border-blue-200 rounded-md p-3 text-left text-sm text-blue-800">
+              💡 Tip: Add a machine heartbeat check with a 5-min period to detect when your server goes down. Example:
+              <code className="block mt-1 text-xs bg-white rounded px-2 py-1 break-all">*/5 * * * * curl -fsS https://pulsechecks.web.app/ping/&#123;token&#125;</code>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -787,6 +797,12 @@ export default function ChecksPage({ user, onLogout }) {
                     />
                   </div>
                 </div>
+
+                {quickEditData.graceSeconds > 2 * quickEditData.periodSeconds && (
+                  <div className="bg-amber-50 border border-amber-300 rounded-md p-3 text-sm text-amber-800">
+                    ⚠️ Grace period is longer than 2× the check period — you may miss alerts
+                  </div>
+                )}
                 
                 <div className="flex space-x-3 pt-4">
                   <button

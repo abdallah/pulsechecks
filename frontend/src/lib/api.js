@@ -209,6 +209,12 @@ class ApiClient {
     })
   }
 
+  async testAlertChannel(teamId, channelId) {
+    return this.request(`/teams/${teamId}/channels/${channelId}/test`, {
+      method: 'POST',
+    })
+  }
+
   async updateTeamMemberRole(teamId, userId, role) {
     return this.request(`/teams/${teamId}/members/${userId}`, {
       method: 'PATCH',

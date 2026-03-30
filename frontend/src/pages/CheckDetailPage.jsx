@@ -338,6 +338,11 @@ export default function CheckDetailPage({ user, onLogout }) {
                 </dd>
               </div>
             </dl>
+            {check.graceSeconds > 2 * check.periodSeconds && (
+              <div className="mt-4 bg-amber-50 border border-amber-300 rounded-md p-3 text-sm text-amber-800">
+                ⚠️ Grace period is longer than 2× the check period — you may miss alerts
+              </div>
+            )}
           </div>
         </div>
 

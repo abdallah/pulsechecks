@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Copy, Pause, Play, Clock, Activity as ActivityIcon, Bell, Users, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Copy, Pause, Play, Clock, Activity as ActivityIcon, Bell, Users, CheckCircle, Settings } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
@@ -31,6 +31,9 @@ export default function CheckDetailPage({ user, onLogout }) {
   const [availableTopics, setAvailableTopics] = useState([])
   const [availableChannels, setAvailableChannels] = useState([])
   const [showAlertSettings, setShowAlertSettings] = useState(false)
+  const [showEditHttpCheck, setShowEditHttpCheck] = useState(false)
+  const [editHttpData, setEditHttpData] = useState({ url: '', expectedStatusCode: 200, expectedString: '', failureThreshold: 1 })
+  const [editHttpLoading, setEditHttpLoading] = useState(false)
 
   useEffect(() => {
     loadCheckData()
@@ -196,6 +199,37 @@ export default function CheckDetailPage({ user, onLogout }) {
     }
   }
 
+  function openEditHttpCheck() {
+    setEditHttpData({
+      url: check.url || '',
+      expectedStatusCode: check.expectedStatusCode || 200,
+      expectedString: check.expectedString || '',
+      failureThreshold: check.failureThreshold || 1,
+    })
+    setShowEditHttpCheck(true)
+  }
+
+  async function handleEditHttpCheck(e) {
+    e.preventDefault()
+    setEditHttpLoading(true)
+    try {
+      const payload = {
+        url: editHttpData.url,
+        expectedStatusCode: editHttpData.expectedStatusCode,
+        failureThreshold: editHttpData.failureThreshold,
+      }
+      if (editHttpData.expectedString) payload.expectedString = editHttpData.expectedString
+      const updatedCheck = await api.updateCheck(teamId, checkId, payload)
+      setCheck(updatedCheck)
+      setShowEditHttpCheck(false)
+      toast.success('HTTP check updated successfully')
+    } catch (error) {
+      toast.error('Failed to update check: ' + error.message)
+    } finally {
+      setEditHttpLoading(false)
+    }
+  }
+
   function copyPingUrl() {
     if (check?.pingUrl) {
       navigator.clipboard.writeText(check.pingUrl)
@@ -312,7 +346,16 @@ export default function CheckDetailPage({ user, onLogout }) {
 
               {check.type === 'http' && (
               <div className="sm:col-span-2">
-                <dt className="text-sm font-medium text-gray-500">Monitored URL</dt>
+                <dt className="text-sm font-medium text-gray-500 flex items-center justify-between">
+                  <span>Monitored URL</span>
+                  <button
+                    onClick={openEditHttpCheck}
+                    className="inline-flex items-center px-2 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <Settings className="h-3 w-3 mr-1" />
+                    Edit
+                  </button>
+                </dt>
                 <dd className="mt-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200 overflow-x-auto">
                   {check.url} <span className="text-gray-500">(expecting {check.expectedStatusCode || 200})</span>
                 </dd>
@@ -615,6 +658,90 @@ curl ${check.pingUrl}/start`}
                   Done
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit HTTP Check Modal */}
+      {showEditHttpCheck && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 lg:w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Edit HTTP Check</h3>
+                <button onClick={() => setShowEditHttpCheck(false)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <form onSubmit={handleEditHttpCheck} className="space-y-4">
+                <div>
+                  <label htmlFor="editUrl" className="block text-sm font-medium text-gray-700">URL</label>
+                  <input
+                    type="url"
+                    id="editUrl"
+                    value={editHttpData.url}
+                    onChange={(e) => setEditHttpData({ ...editHttpData, url: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="https://example.com/health"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="editStatusCode" className="block text-sm font-medium text-gray-700">Expected Status Code</label>
+                  <input
+                    type="number"
+                    id="editStatusCode"
+                    value={editHttpData.expectedStatusCode}
+                    onChange={(e) => setEditHttpData({ ...editHttpData, expectedStatusCode: parseInt(e.target.value) || 200 })}
+                    className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    min="100"
+                    max="599"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="editExpectedString" className="block text-sm font-medium text-gray-700">Expected String <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input
+                    type="text"
+                    id="editExpectedString"
+                    value={editHttpData.expectedString}
+                    onChange={(e) => setEditHttpData({ ...editHttpData, expectedString: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="OK"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="editFailureThreshold" className="block text-sm font-medium text-gray-700">Alert after N consecutive failures</label>
+                  <input
+                    type="number"
+                    id="editFailureThreshold"
+                    value={editHttpData.failureThreshold}
+                    onChange={(e) => setEditHttpData({ ...editHttpData, failureThreshold: parseInt(e.target.value) || 1 })}
+                    className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    min="1"
+                    max="100"
+                  />
+                </div>
+                <div className="flex space-x-3 pt-2">
+                  <button
+                    type="submit"
+                    disabled={editHttpLoading}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
+                  >
+                    {editHttpLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditHttpCheck(false)}
+                    disabled={editHttpLoading}
+                    className="flex-1 px-4 py-2 bg-white text-gray-500 text-sm font-medium rounded-md shadow-sm border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

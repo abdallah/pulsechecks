@@ -29,6 +29,7 @@ class CheckType(str, Enum):
     """Check type values."""
 
     CRON = "cron"
+    HEARTBEAT = "heartbeat"
     HTTP = "http"
 
 

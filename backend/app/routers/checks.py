@@ -56,7 +56,7 @@ def _check_detail_response(check) -> CheckDetailResponse:
         suppressDurationMinutes=getattr(check, 'suppress_duration_minutes', None),
         consecutiveAlertCount=getattr(check, 'consecutive_alert_count', 0),
         suppressedUntil=getattr(check, 'suppressed_until', None),
-        type=getattr(check, 'type', 'cron'),
+        type='heartbeat' if getattr(check, 'type', 'cron') == 'cron' else getattr(check, 'type', 'cron'),
         url=getattr(check, 'url', None),
         expectedStatusCode=getattr(check, 'expected_status_code', 200),
         expectedString=getattr(check, 'expected_string', None),

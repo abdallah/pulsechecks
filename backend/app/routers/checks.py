@@ -29,6 +29,7 @@ from ..utils import (
     get_current_time_seconds,
     calculate_next_due,
     calculate_alert_after,
+    calculate_next_due_from_cron,
 )
 
 router = APIRouter(prefix="/teams/{team_id}/checks", tags=["checks"])
@@ -42,6 +43,7 @@ def _check_detail_response(check) -> CheckDetailResponse:
         name=check.name,
         status=check.status,
         periodSeconds=check.period_seconds,
+        schedule=check.schedule,
         graceSeconds=check.grace_seconds,
         token=check.token,
         lastPingAt=check.last_ping_at,
@@ -56,7 +58,7 @@ def _check_detail_response(check) -> CheckDetailResponse:
         suppressDurationMinutes=getattr(check, 'suppress_duration_minutes', None),
         consecutiveAlertCount=getattr(check, 'consecutive_alert_count', 0),
         suppressedUntil=getattr(check, 'suppressed_until', None),
-        type=getattr(check, 'type', 'cron'),
+        type=check.type,
         url=getattr(check, 'url', None),
         expectedStatusCode=getattr(check, 'expected_status_code', 200),
         expectedString=getattr(check, 'expected_string', None),
@@ -174,6 +176,7 @@ async def create_check(
         name=request.name,
         token=token,
         period_seconds=request.period_seconds,
+        schedule=request.schedule,
         grace_seconds=request.grace_seconds,
         status=CheckStatus.PENDING,  # New checks start as pending
         created_at=get_iso_timestamp(),
@@ -184,6 +187,10 @@ async def create_check(
         expected_string=request.expected_string,
         failure_threshold=request.failure_threshold,
     )
+    # Pre-compute next_due_at for cron checks so the late detector can find them immediately
+    if request.type == "cron":
+        check.next_due_at = str(calculate_next_due_from_cron(request.schedule))
+        check.alert_after_at = str(int(check.next_due_at) + request.grace_seconds)
     await db.create_check(check)
     
     # Record metrics and log business event
@@ -213,6 +220,7 @@ async def list_team_checks(
             name=check.name,
             status=check.status,
             periodSeconds=check.period_seconds,
+            schedule=check.schedule,
             graceSeconds=check.grace_seconds,
             lastPingAt=check.last_ping_at,
             nextDueAt=check.next_due_at,
@@ -287,26 +295,26 @@ async def update_check(
         updates["expectedString"] = request.expected_string
     if request.failure_threshold is not None:
         updates["failureThreshold"] = request.failure_threshold
+    if request.schedule is not None:
+        updates["schedule"] = request.schedule
 
     if not updates:
-        # No updates provided, return current check
         return _check_detail_response(check)
 
-    # Recalculate alert time if period or grace changed
-    if ("periodSeconds" in updates or "graceSeconds" in updates) and check.last_ping_at:
+    # Recalculate next_due/alert_after when schedule or period/grace changes
+    grace = updates.get("graceSeconds", check.grace_seconds)
+    if "schedule" in updates:
+        next_due = calculate_next_due_from_cron(updates["schedule"])
+        updates["nextDueAt"] = str(next_due)
+        updates["alertAfterAt"] = str(next_due + grace)
+    elif ("periodSeconds" in updates or "graceSeconds" in updates) and check.last_ping_at:
         period = updates.get("periodSeconds", check.period_seconds)
-        grace = updates.get("graceSeconds", check.grace_seconds)
-        # Parse last ping time to seconds
         from datetime import datetime
-
-        last_ping_dt = datetime.fromisoformat(check.last_ping_at.replace("Z", "+00:00"))
-        last_ping_seconds = int(last_ping_dt.timestamp())
+        last_ping_seconds = int(datetime.fromisoformat(check.last_ping_at.replace("Z", "+00:00")).timestamp())
         updates["alertAfterAt"] = calculate_alert_after(last_ping_seconds, period, grace)
         updates["nextDueAt"] = calculate_next_due(last_ping_seconds, period)
 
-    # Perform update
     updated_check = await db.update_check(team_id, check_id, updates)
-
     return _check_detail_response(updated_check)
 
 

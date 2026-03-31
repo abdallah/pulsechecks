@@ -8,25 +8,46 @@ terraform {
 
 provider "pulsechecks" {
   api_url = "https://api.pulsechecks.example.com"
-  token   = "test-token"
+  token   = "your-api-token"
 }
 
 resource "pulsechecks_team" "example" {
-  name = "Test Team"
+  name = "My Team"
 }
 
-resource "pulsechecks_check" "database_backup" {
+# Heartbeat — always-running process pings every 5 minutes
+resource "pulsechecks_check" "worker" {
   team_id        = pulsechecks_team.example.team_id
-  name           = "Database Backup Check"
-  period_seconds = 86400
-  grace_seconds  = 3600
+  name           = "Background Worker"
+  check_type     = "heartbeat"
+  period_seconds = 300
+  grace_seconds  = 60
 }
 
-output "team_id" {
-  value = pulsechecks_team.example.team_id
+# Cron — scheduled job; next due time derived from cron expression
+resource "pulsechecks_check" "nightly_backup" {
+  team_id       = pulsechecks_team.example.team_id
+  name          = "Nightly Database Backup"
+  check_type    = "cron"
+  schedule      = "0 2 * * *"
+  grace_seconds = 1800
 }
 
-output "check_token" {
-  value     = pulsechecks_check.database_backup.token
+# HTTP — PulseChecks actively polls the URL every 60 seconds
+resource "pulsechecks_check" "api_health" {
+  team_id        = pulsechecks_team.example.team_id
+  name           = "API Health"
+  check_type     = "http"
+  period_seconds = 60
+  grace_seconds  = 30
+}
+
+output "worker_ping_url" {
+  value     = "https://api.pulsechecks.example.com/ping/${pulsechecks_check.worker.token}"
+  sensitive = true
+}
+
+output "backup_ping_url" {
+  value     = "https://api.pulsechecks.example.com/ping/${pulsechecks_check.nightly_backup.token}"
   sensitive = true
 }

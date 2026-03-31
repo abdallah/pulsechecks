@@ -230,9 +230,10 @@ class DynamoDBClient(DatabaseInterface):
             if check.alert_channels:
                 item["alertChannels"] = check.alert_channels
 
-            # HTTP check fields
-            if check.type != "cron":
-                item["type"] = check.type if isinstance(check.type, str) else check.type.value
+            # Always store type so cron/heartbeat/http are distinct
+            item["type"] = check.type if isinstance(check.type, str) else check.type.value
+            if check.schedule:
+                item["schedule"] = check.schedule
             if check.url:
                 item["url"] = check.url
             if check.expected_status_code != 200:
@@ -549,7 +550,8 @@ class DynamoDBClient(DatabaseInterface):
             alert_channels=item.get("alertChannels", []),
             escalation_minutes=convert_to_int(item.get("escalationMinutes")) if item.get("escalationMinutes") else None,
             escalation_alert_channels=item.get("escalationAlertChannels", []),
-            type=item.get("type", "cron"),
+            type=item.get("type", "heartbeat"),
+            schedule=item.get("schedule"),
             url=item.get("url"),
             expected_status_code=convert_to_int(item.get("expectedStatusCode")) or 200,
         )

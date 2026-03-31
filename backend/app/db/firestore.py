@@ -313,6 +313,7 @@ class FirestoreClient(DatabaseInterface):
             'escalationMinutes': check.escalation_minutes,
             'escalationAlertChannels': check.escalation_alert_channels or [],
             'type': check.type if isinstance(check.type, str) else check.type.value,
+            'schedule': check.schedule,
             'url': check.url,
             'expectedStatusCode': check.expected_status_code,
         }
@@ -775,7 +776,8 @@ class FirestoreClient(DatabaseInterface):
             consecutive_alert_count=int(data.get('consecutiveAlertCount', 0)),
             suppressed_until=data.get('suppressedUntil'),
             escalation_triggered_at=data.get('escalationTriggeredAt'),
-            type=data.get('type', 'cron'),
+            type=data.get('type', 'heartbeat'),
+            schedule=data.get('schedule'),
             url=data.get('url'),
             expected_status_code=int(data.get('expectedStatusCode', 200)),
             failure_threshold=int(data.get('failureThreshold', 1)),

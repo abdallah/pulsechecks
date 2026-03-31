@@ -314,6 +314,9 @@ export default function CheckDetailPage({ user, onLogout }) {
                 check.status === 'late' ? 'text-red-600' :
                 'text-gray-600'
               }`}>{check.status.toUpperCase()}</span>
+              <span className="ml-3 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 capitalize">
+                {check.type || 'cron'}
+              </span>
             </p>
           </div>
           <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
@@ -341,6 +344,12 @@ export default function CheckDetailPage({ user, onLogout }) {
                   </button>
                 </dd>
                 {copied && <p className="mt-1 text-xs text-green-600">Copied!</p>}
+                {check.type === 'heartbeat' && (
+                  <p className="mt-1 text-xs text-gray-500">Heartbeat — send a GET or POST to this URL at each interval. /start and /fail are not supported.</p>
+                )}
+                {check.type === 'cron' && (
+                  <p className="mt-1 text-xs text-gray-500">Cron job — optionally ping <code className="bg-gray-100 px-1 rounded">/start</code> when the job begins and <code className="bg-gray-100 px-1 rounded">/fail</code> if it fails.</p>
+                )}
               </div>
               )}
 

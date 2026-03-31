@@ -12,6 +12,7 @@ from ..utils import (
     get_current_time_seconds,
     calculate_next_due,
     calculate_alert_after,
+    calculate_next_due_from_cron,
 )
 from ..logging_config import get_logger, log_business_event
 from ..metrics import get_metrics_client
@@ -42,6 +43,13 @@ async def _record_ping_internal(
             detail="Check not found",
         )
 
+    # Heartbeat checks only accept success pings — no start/fail signals
+    if check.type == 'heartbeat' and ping_type != PingType.SUCCESS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Heartbeat checks only accept simple pings. Use /ping/{token} without /start or /fail.",
+        )
+
     # Check if this is a recovery (late -> up transition) or first ping (pending -> up)
     was_late = check.status == CheckStatus.LATE.value
     was_pending = check.status == CheckStatus.PENDING.value
@@ -60,10 +68,11 @@ async def _record_ping_internal(
     await db.create_ping(ping)
 
     # Update check with new ping time (only if not paused)
-    next_due = calculate_next_due(current_time_seconds, check.period_seconds)
-    alert_after = calculate_alert_after(
-        current_time_seconds, check.period_seconds, check.grace_seconds
-    )
+    if check.type == 'cron' and check.schedule:
+        next_due = calculate_next_due_from_cron(check.schedule, current_time_seconds)
+    else:
+        next_due = calculate_next_due(current_time_seconds, check.period_seconds)
+    alert_after = next_due + check.grace_seconds
 
     # Determine check status based on ping type
     # START: keep current status (job started, wait for completion)
@@ -72,12 +81,6 @@ async def _record_ping_internal(
     if ping_type == PingType.START:
         # Don't update status, just record the start
         return OkResponse(message="Start signal recorded")
-
-    # Update check with new ping time (only if not paused)
-    next_due = calculate_next_due(current_time_seconds, check.period_seconds)
-    alert_after = calculate_alert_after(
-        current_time_seconds, check.period_seconds, check.grace_seconds
-    )
 
     new_status = CheckStatus.UP.value if ping_type == PingType.SUCCESS else CheckStatus.LATE.value
 

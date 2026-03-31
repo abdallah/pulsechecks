@@ -47,6 +47,20 @@ def calculate_alert_after(last_ping_seconds: int, period_seconds: int, grace_sec
     return last_ping_seconds + period_seconds + effective_grace
 
 
+def calculate_next_due_from_cron(schedule: str, after_seconds: int = None) -> int:
+    """Calculate next due time in seconds from a cron expression."""
+    from croniter import croniter
+    from datetime import datetime, timezone
+    base = datetime.fromtimestamp(after_seconds or get_current_time_seconds(), timezone.utc)
+    return int(croniter(schedule, base).get_next())
+
+
+def validate_cron_expression(schedule: str) -> bool:
+    """Return True if the cron expression is valid."""
+    from croniter import croniter
+    return croniter.is_valid(schedule)
+
+
 def generate_token() -> str:
     """Generate a secure random token."""
     return secrets.token_urlsafe(32)

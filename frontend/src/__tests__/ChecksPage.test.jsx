@@ -186,7 +186,8 @@ describe('ChecksPage', () => {
         periodSeconds: 3600, // 60 minutes * 60 seconds
         graceSeconds: 300, // 5 minutes * 60 seconds
         alertChannels: [],
-        type: 'cron',
+        type: 'heartbeat',
+        schedule: '',
         url: '',
         expectedStatusCode: 200,
         failureThreshold: 1

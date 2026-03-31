@@ -24,16 +24,19 @@ class CreateCheckRequest(BaseModel):
     """Request to create a new check."""
 
     name: str = Field(..., min_length=1, max_length=200, description="Check name")
-    period_seconds: int = Field(
-        ..., ge=60, le=31536000, description="Check period in seconds (1min - 1year)",
+    period_seconds: Optional[int] = Field(
+        None, ge=60, le=31536000, description="Check period in seconds — required for heartbeat and http",
         alias="periodSeconds"
+    )
+    schedule: Optional[str] = Field(
+        None, max_length=100, description="Cron expression — required for cron checks (e.g. '0 2 * * *')"
     )
     grace_seconds: int = Field(
         ..., ge=0, le=86400, description="Grace period in seconds (0 - 24h)",
         alias="graceSeconds"
     )
     alert_channels: list[str] = Field(default_factory=list, description="List of alert channel IDs to notify")
-    type: str = Field(default="cron", description="Check type: cron, heartbeat, or http")
+    type: str = Field(default="heartbeat", description="Check type: cron, heartbeat, or http")
     url: Optional[str] = Field(None, max_length=2048, description="Target URL for http checks")
     expected_status_code: int = Field(default=200, ge=100, le=599, alias="expectedStatusCode", description="Expected HTTP status code")
     expected_string: Optional[str] = Field(None, max_length=1000, alias="expectedString", description="Expected string in response body")
@@ -51,7 +54,6 @@ class CreateCheckRequest(BaseModel):
     def validate_type(cls, v: str) -> str:
         if v not in ("cron", "heartbeat", "http"):
             raise ValueError("type must be 'cron', 'heartbeat', or 'http'")
-
         return v
 
     @field_validator("alert_channels")
@@ -62,14 +64,23 @@ class CreateCheckRequest(BaseModel):
         return v
 
     @model_validator(mode='after')
-    def validate_grace_period(self):
-        """Ensure grace period is reasonable relative to check period."""
-        if self.grace_seconds > self.period_seconds:
-            raise ValueError("grace_seconds cannot exceed period_seconds")
-        if self.type == "http" and not self.url:
-            raise ValueError("url is required for http checks")
-        if self.type == "http" and self.url and not self.url.startswith(("http://", "https://")):
-            raise ValueError("url must start with http:// or https://")
+    def validate_by_type(self):
+        if self.type == "cron":
+            if not self.schedule:
+                raise ValueError("schedule is required for cron checks")
+            from ..utils import validate_cron_expression
+            if not validate_cron_expression(self.schedule):
+                raise ValueError("schedule must be a valid cron expression (e.g. '0 2 * * *')")
+        else:
+            if self.period_seconds is None:
+                raise ValueError("periodSeconds is required for heartbeat and http checks")
+            if self.grace_seconds > self.period_seconds:
+                raise ValueError("grace_seconds cannot exceed period_seconds")
+        if self.type == "http":
+            if not self.url:
+                raise ValueError("url is required for http checks")
+            if not self.url.startswith(("http://", "https://")):
+                raise ValueError("url must start with http:// or https://")
         return self
 
 
@@ -80,6 +91,7 @@ class UpdateCheckRequest(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     period_seconds: Optional[int] = Field(None, ge=60, le=31536000, alias="periodSeconds")
+    schedule: Optional[str] = Field(None, max_length=100)
     grace_seconds: Optional[int] = Field(None, ge=0, le=86400, alias="graceSeconds")
     alert_channels: Optional[list[str]] = Field(None, alias="alertChannels", description="List of alert channel IDs to notify")
     url: Optional[str] = Field(None, max_length=2048, description="Target URL for http checks")
@@ -101,6 +113,15 @@ class UpdateCheckRequest(BaseModel):
             raise ValueError("name cannot be empty or whitespace")
         return v.strip() if v else None
 
+    @field_validator("schedule")
+    @classmethod
+    def validate_schedule(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            from ..utils import validate_cron_expression
+            if not validate_cron_expression(v):
+                raise ValueError("schedule must be a valid cron expression (e.g. '0 2 * * *')")
+        return v
+
     @field_validator("alert_channels")
     @classmethod
     def validate_alert_channels(cls, v: Optional[list[str]]) -> Optional[list[str]]:
@@ -111,7 +132,6 @@ class UpdateCheckRequest(BaseModel):
 
     @model_validator(mode='after')
     def validate_grace_period(self):
-        """Ensure grace period is reasonable relative to check period."""
         if self.grace_seconds is not None and self.period_seconds is not None:
             if self.grace_seconds > self.period_seconds:
                 raise ValueError("grace_seconds cannot exceed period_seconds")

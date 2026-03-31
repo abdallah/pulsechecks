@@ -38,6 +38,10 @@ export default function TeamSettingsPage({ user, onLogout }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [apiTokens, setApiTokens] = useState([])
+  const [newTokenName, setNewTokenName] = useState('')
+  const [createdToken, setCreatedToken] = useState(null)
+  const [showCreateToken, setShowCreateToken] = useState(false)
 
   useEffect(() => {
     loadTeam()
@@ -46,6 +50,8 @@ export default function TeamSettingsPage({ user, onLogout }) {
     } else if (activeTab === 'alerts') {
       loadAlerts()
       loadChannels()
+    } else if (activeTab === 'tokens') {
+      loadApiTokens()
     }
   }, [teamId, activeTab])
 
@@ -213,6 +219,39 @@ export default function TeamSettingsPage({ user, onLogout }) {
       setChannels(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Failed to load alert channels:', error)
+    }
+  }
+
+  async function loadApiTokens() {
+    try {
+      const data = await api.listApiTokens(teamId)
+      setApiTokens(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Failed to load API tokens:', error)
+    }
+  }
+
+  async function handleCreateToken(e) {
+    e.preventDefault()
+    if (!newTokenName.trim()) return
+    try {
+      const result = await api.createApiToken(teamId, newTokenName.trim())
+      setCreatedToken(result.token)
+      setNewTokenName('')
+      setShowCreateToken(false)
+      loadApiTokens()
+    } catch (error) {
+      alert('Failed to create token: ' + error.message)
+    }
+  }
+
+  async function handleRevokeToken(tokenId) {
+    if (!confirm('Revoke this token? Any scripts using it will stop working.')) return
+    try {
+      await api.revokeApiToken(teamId, tokenId)
+      loadApiTokens()
+    } catch (error) {
+      alert('Failed to revoke token: ' + error.message)
     }
   }
 
@@ -540,6 +579,17 @@ export default function TeamSettingsPage({ user, onLogout }) {
             >
               <Bell className="h-4 w-4 inline mr-2" />
               Alert Channels
+            </button>
+            <button
+              onClick={() => setActiveTab('tokens')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'tokens'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Shield className="h-4 w-4 inline mr-2" />
+              API Tokens
             </button>
             <button
               onClick={() => setActiveTab('danger')}
@@ -907,6 +957,112 @@ export default function TeamSettingsPage({ user, onLogout }) {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* API Tokens Tab */}
+        {activeTab === 'tokens' && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
+                  <Shield className="h-5 w-5 mr-2" />
+                  API Tokens ({apiTokens.length})
+                </h3>
+                <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                  Tokens for authenticating API requests without a user session
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCreateToken(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Token
+              </button>
+            </div>
+
+            {showCreateToken && (
+              <div className="border-t border-gray-200 px-4 py-4 bg-gray-50">
+                <form onSubmit={handleCreateToken} className="flex items-end space-x-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700">Token Name</label>
+                    <input
+                      type="text"
+                      value={newTokenName}
+                      onChange={(e) => setNewTokenName(e.target.value)}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="e.g. CI pipeline"
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
+                    Create
+                  </button>
+                  <button type="button" onClick={() => setShowCreateToken(false)} className="px-4 py-2 bg-white text-gray-700 text-sm font-medium rounded-md border border-gray-300 hover:bg-gray-50">
+                    Cancel
+                  </button>
+                </form>
+              </div>
+            )}
+
+            <div className="border-t border-gray-200">
+              {apiTokens.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-gray-500 text-center">No API tokens yet.</p>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {apiTokens.map((token) => (
+                    <li key={token.token_id} className="px-4 py-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{token.name}</p>
+                        <p className="text-xs text-gray-500">
+                          Created {new Date(token.created_at).toLocaleDateString()}
+                          {token.last_used_at && ` · Last used ${new Date(token.last_used_at).toLocaleDateString()}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRevokeToken(token.token_id)}
+                        className="inline-flex items-center px-3 py-1 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Revoke
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Created Token Modal */}
+        {createdToken && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div className="relative top-20 mx-auto p-5 border w-[480px] shadow-lg rounded-md bg-white">
+              <div className="mt-3">
+                <h3 className="text-lg font-medium text-gray-900">Token Created</h3>
+                <p className="mt-2 text-sm text-gray-500">
+                  Copy this token now — it will not be shown again.
+                </p>
+                <div className="mt-4 flex items-center space-x-2">
+                  <code className="flex-1 block bg-gray-100 rounded px-3 py-2 text-sm font-mono break-all">
+                    {createdToken}
+                  </code>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(createdToken); toast.success('Copied!') }}
+                    className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <button
+                  onClick={() => setCreatedToken(null)}
+                  className="mt-4 w-full px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200"
+                >
+                  Done
+                </button>
               </div>
             </div>
           </div>

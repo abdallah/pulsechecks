@@ -23,6 +23,8 @@ class CreateTeamRequest(BaseModel):
 class CreateCheckRequest(BaseModel):
     """Request to create a new check."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str = Field(..., min_length=1, max_length=200, description="Check name")
     period_seconds: Optional[int] = Field(
         None, ge=60, le=31536000, description="Check period in seconds — required for heartbeat and http",

@@ -24,8 +24,10 @@ type Check struct {
 	CheckId       string `json:"checkId"`
 	TeamId        string `json:"teamId"`
 	Name          string `json:"name"`
+	CheckType     string `json:"type"`
 	Status        string `json:"status"`
-	PeriodSeconds int    `json:"periodSeconds"`
+	PeriodSeconds int    `json:"periodSeconds,omitempty"`
+	Schedule      string `json:"schedule,omitempty"`
 	GraceSeconds  int    `json:"graceSeconds"`
 	Token         string `json:"token"`
 	LastPingAt    string `json:"lastPingAt,omitempty"`
@@ -98,14 +100,16 @@ func (c *ApiClient) GetTeam(teamId string) (*Team, error) {
 	return &team, nil
 }
 
-func (c *ApiClient) CreateCheck(teamId, name string, periodSeconds, graceSeconds int) (*Check, error) {
-	body := map[string]interface{}{
-		"name":          name,
-		"periodSeconds": periodSeconds,
-		"graceSeconds":  graceSeconds,
-	}
-	
-	resp, err := c.doRequest("POST", "/teams/"+teamId+"/checks", body)
+type CheckRequest struct {
+	Name          string `json:"name"`
+	Type          string `json:"type"`
+	PeriodSeconds int    `json:"periodSeconds,omitempty"`
+	Schedule      string `json:"schedule,omitempty"`
+	GraceSeconds  int    `json:"graceSeconds"`
+}
+
+func (c *ApiClient) CreateCheck(teamId string, req CheckRequest) (*Check, error) {
+	resp, err := c.doRequest("POST", "/teams/"+teamId+"/checks", req)
 	if err != nil {
 		return nil, err
 	}
@@ -145,14 +149,8 @@ func (c *ApiClient) GetCheck(teamId, checkId string) (*Check, error) {
 	return &check, nil
 }
 
-func (c *ApiClient) UpdateCheck(teamId, checkId, name string, periodSeconds, graceSeconds int) (*Check, error) {
-	body := map[string]interface{}{
-		"name":          name,
-		"periodSeconds": periodSeconds,
-		"graceSeconds":  graceSeconds,
-	}
-	
-	resp, err := c.doRequest("PATCH", "/teams/"+teamId+"/checks/"+checkId, body)
+func (c *ApiClient) UpdateCheck(teamId, checkId string, req CheckRequest) (*Check, error) {
+	resp, err := c.doRequest("PATCH", "/teams/"+teamId+"/checks/"+checkId, req)
 	if err != nil {
 		return nil, err
 	}

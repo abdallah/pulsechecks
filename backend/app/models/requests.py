@@ -51,8 +51,7 @@ class CreateCheckRequest(BaseModel):
     def validate_type(cls, v: str) -> str:
         if v not in ("cron", "heartbeat", "http"):
             raise ValueError("type must be 'cron', 'heartbeat', or 'http'")
-        if v == "heartbeat":
-            return "cron"  # heartbeat is alias for cron
+
         return v
 
     @field_validator("alert_channels")

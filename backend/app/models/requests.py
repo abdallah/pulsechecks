@@ -33,7 +33,7 @@ class CreateCheckRequest(BaseModel):
         alias="graceSeconds"
     )
     alert_channels: list[str] = Field(default_factory=list, description="List of alert channel IDs to notify")
-    type: str = Field(default="cron", description="Check type: cron or http")
+    type: str = Field(default="cron", description="Check type: cron, heartbeat, or http")
     url: Optional[str] = Field(None, max_length=2048, description="Target URL for http checks")
     expected_status_code: int = Field(default=200, ge=100, le=599, alias="expectedStatusCode", description="Expected HTTP status code")
     expected_string: Optional[str] = Field(None, max_length=1000, alias="expectedString", description="Expected string in response body")
@@ -49,8 +49,10 @@ class CreateCheckRequest(BaseModel):
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: str) -> str:
-        if v not in ("cron", "http"):
-            raise ValueError("type must be 'cron' or 'http'")
+        if v not in ("cron", "heartbeat", "http"):
+            raise ValueError("type must be 'cron', 'heartbeat', or 'http'")
+        if v == "heartbeat":
+            return "cron"  # heartbeat is alias for cron
         return v
 
     @field_validator("alert_channels")

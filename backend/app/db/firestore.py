@@ -778,4 +778,5 @@ class FirestoreClient(DatabaseInterface):
             type=data.get('type', 'cron'),
             url=data.get('url'),
             expected_status_code=int(data.get('expectedStatusCode', 200)),
+            failure_threshold=int(data.get('failureThreshold', 1)),
         )

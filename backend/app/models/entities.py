@@ -68,7 +68,8 @@ class Check(BaseModel):
     team_id: str
     name: str
     token: str
-    period_seconds: int
+    period_seconds: Optional[int] = None   # heartbeat + http only
+    schedule: Optional[str] = None          # cron only (e.g. "0 2 * * *")
     grace_seconds: int
     status: CheckStatus = CheckStatus.UP
     created_at: str

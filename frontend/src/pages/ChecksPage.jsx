@@ -21,7 +21,8 @@ export default function ChecksPage({ user, onLogout }) {
     periodSeconds: 60, // 1 minute in seconds
     graceSeconds: 300, // 5 minutes in seconds
     alertChannels: [], // Selected alert channel IDs
-    type: 'cron',
+    type: 'heartbeat',
+    schedule: '',
     url: '',
     expectedStatusCode: 200,
     failureThreshold: 1,
@@ -123,7 +124,7 @@ export default function ChecksPage({ user, onLogout }) {
     setCreating(true)
     try {
       await api.createCheck(teamId, formData)
-      setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [], type: 'cron', url: '', expectedStatusCode: 200, failureThreshold: 1 })
+      setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [], type: 'heartbeat', schedule: '', url: '', expectedStatusCode: 200, failureThreshold: 1 })
       setShowCreateCheck(false)
       loadChecks()
       toast.success('Check created successfully')
@@ -355,6 +356,17 @@ export default function ChecksPage({ user, onLogout }) {
                     <input
                       type="radio"
                       name="checkType"
+                      value="heartbeat"
+                      checked={formData.type === 'heartbeat'}
+                      onChange={() => setFormData({ ...formData, type: 'heartbeat', url: '', expectedStatusCode: 200, failureThreshold: 1 })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Heartbeat</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="checkType"
                       value="http"
                       checked={formData.type === 'http'}
                       onChange={() => setFormData({ ...formData, type: 'http' })}
@@ -363,6 +375,12 @@ export default function ChecksPage({ user, onLogout }) {
                     <span className="ml-2 text-sm text-gray-700">HTTP Endpoint</span>
                   </label>
                 </div>
+                {formData.type === 'cron' && (
+                  <p className="mt-1 text-xs text-gray-500">Scheduled job — PulseChecks alerts if your cron job misses its schedule</p>
+                )}
+                {formData.type === 'heartbeat' && (
+                  <p className="mt-1 text-xs text-gray-500">Always-running process — send a simple ping at each interval to confirm it's alive</p>
+                )}
               </div>
 
               {formData.type === 'http' && (
@@ -413,41 +431,75 @@ export default function ChecksPage({ user, onLogout }) {
                 </div>
               )}
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="period" className="block text-sm font-medium text-gray-700">
-                    Period (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    id="period"
-                    value={Math.round(formData.periodSeconds / 60)}
-                    onChange={(e) => setFormData({ ...formData, periodSeconds: parseInt(e.target.value) * 60 })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    min="1"
-                    required
-                  />
-                  <p className="mt-1 text-xs text-gray-500">How often the job runs</p>
+              {formData.type === 'cron' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <label htmlFor="schedule" className="block text-sm font-medium text-gray-700">
+                      Cron Schedule
+                    </label>
+                    <input
+                      type="text"
+                      id="schedule"
+                      value={formData.schedule}
+                      onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono"
+                      placeholder="0 2 * * *"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">e.g. <code className="bg-gray-100 px-1 rounded">0 2 * * *</code> — every day at 2am · <code className="bg-gray-100 px-1 rounded">*/15 * * * *</code> — every 15 min</p>
+                  </div>
+                  <div>
+                    <label htmlFor="grace" className="block text-sm font-medium text-gray-700">
+                      Grace (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      id="grace"
+                      value={Math.round(formData.graceSeconds / 60)}
+                      onChange={(e) => setFormData({ ...formData, graceSeconds: parseInt(e.target.value) * 60 })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      min="0"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Extra time before alert</p>
+                  </div>
                 </div>
-                
-                <div>
-                  <label htmlFor="grace" className="block text-sm font-medium text-gray-700">
-                    Grace (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    id="grace"
-                    value={Math.round(formData.graceSeconds / 60)}
-                    onChange={(e) => setFormData({ ...formData, graceSeconds: parseInt(e.target.value) * 60 })}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    min="0"
-                    required
-                  />
-                  <p className="mt-1 text-xs text-gray-500">Extra time before alert</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="period" className="block text-sm font-medium text-gray-700">
+                      Period (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      id="period"
+                      value={Math.round(formData.periodSeconds / 60)}
+                      onChange={(e) => setFormData({ ...formData, periodSeconds: parseInt(e.target.value) * 60 })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      min="1"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">{formData.type === 'heartbeat' ? 'How often to ping' : 'How often to check'}</p>
+                  </div>
+                  <div>
+                    <label htmlFor="grace" className="block text-sm font-medium text-gray-700">
+                      Grace (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      id="grace"
+                      value={Math.round(formData.graceSeconds / 60)}
+                      onChange={(e) => setFormData({ ...formData, graceSeconds: parseInt(e.target.value) * 60 })}
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      min="0"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Extra time before alert</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {formData.graceSeconds > 2 * formData.periodSeconds && (
+              {formData.type !== 'cron' && formData.graceSeconds > 2 * formData.periodSeconds && (
                 <div className="bg-amber-50 border border-amber-300 rounded-md p-3 text-sm text-amber-800">
                   ⚠️ Grace period is longer than 2× the check period — you may miss alerts
                 </div>

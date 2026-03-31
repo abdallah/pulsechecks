@@ -41,13 +41,14 @@ class CheckResponse(BaseModel):
     team_id: str = Field(..., alias="teamId")
     name: str
     status: CheckStatus
-    period_seconds: int = Field(..., alias="periodSeconds")
+    period_seconds: Optional[int] = Field(None, alias="periodSeconds")
+    schedule: Optional[str] = Field(None)
     grace_seconds: int = Field(..., alias="graceSeconds")
     last_ping_at: Optional[str] = Field(None, alias="lastPingAt")
     next_due_at: Optional[str] = Field(None, alias="nextDueAt")
     created_at: str = Field(..., alias="createdAt")
     alert_channels: list[str] = Field(default_factory=list, alias="alertChannels")
-    type: str = Field(default="cron")
+    type: str = Field(default="heartbeat")
     url: Optional[str] = Field(None)
     expected_status_code: int = Field(default=200, alias="expectedStatusCode")
     expected_string: Optional[str] = Field(None, alias="expectedString")

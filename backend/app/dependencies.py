@@ -1,4 +1,7 @@
 """FastAPI dependencies for auth and database access."""
+import asyncio
+import hashlib
+from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -18,13 +21,49 @@ class CurrentUser:
         self.email = email
         self.name = name
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> CurrentUser:
-    """Validate JWT token and return authenticated user."""
+
+async def _resolve_api_token(token: str, db: DatabaseInterface) -> CurrentUser:
+    """Look up a pc_ prefixed API token in Firestore and return the associated user."""
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
     try:
-        print(f"DEBUG: Received token: {credentials.credentials[:50]}...")
+        col = db.db.collection("api_tokens")
+        docs = col.where("token_hash", "==", token_hash)
+        async for doc in docs.stream():
+            data = doc.to_dict()
+            # Async fire-and-forget update of last_used_at
+            asyncio.ensure_future(
+                col.document(data["token_id"]).update(
+                    {"last_used_at": datetime.now(timezone.utc).isoformat()}
+                )
+            )
+            return CurrentUser(
+                user_id=data["user_id"],
+                email="",
+                name=data.get("name", ""),
+            )
+    except Exception:
+        pass
+    raise UnauthorizedError("Invalid API token")
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> CurrentUser:
+    """Validate token and return authenticated user.
+
+    Supports two token types:
+    - pc_<hex>  — PulseChecks API token (looked up by SHA-256 hash in Firestore)
+    - anything else — Firebase/Cognito JWT
+    """
+    raw = credentials.credentials
+
+    if raw.startswith("pc_"):
+        db = create_db_client()
+        return await _resolve_api_token(raw, db)
+
+    try:
+        print(f"DEBUG: Received token: {raw[:50]}...")
         
         # Verify JWT token
-        claims = await verify_jwt_token(credentials.credentials)
+        claims = await verify_jwt_token(raw)
         print(f"DEBUG: JWT claims: {claims}")
         
         # Extract user info

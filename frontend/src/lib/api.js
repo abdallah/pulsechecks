@@ -221,6 +221,24 @@ class ApiClient {
       body: JSON.stringify({ role }),
     })
   }
+
+  // API Tokens
+  async listApiTokens(teamId) {
+    return this.request(`/teams/${teamId}/api-tokens`)
+  }
+
+  async createApiToken(teamId, name) {
+    return this.request(`/teams/${teamId}/api-tokens`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async revokeApiToken(teamId, tokenId) {
+    return this.request(`/teams/${teamId}/api-tokens/${tokenId}`, {
+      method: 'DELETE',
+    })
+  }
 }
 
 export const api = new ApiClient(config.apiUrl)

@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from mangum import Mangum
 from botocore.exceptions import ClientError
 
-from .routers import users_router, teams_router, checks_router, ping_router, channels_router, internal_router
+from .routers import users_router, teams_router, checks_router, ping_router, channels_router, internal_router, api_tokens_router
 from .config import get_settings
 from .middleware import rate_limit_middleware, error_handler_middleware, request_logging_middleware, correlation_id_middleware
 from .errors import (
@@ -69,6 +69,7 @@ app.include_router(checks_router)
 app.include_router(ping_router)
 app.include_router(channels_router)
 app.include_router(internal_router)
+app.include_router(api_tokens_router)
 
 # Lambda handler using Mangum
 # This handles API Gateway HTTP API and REST API events

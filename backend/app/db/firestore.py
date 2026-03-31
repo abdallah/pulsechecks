@@ -631,21 +631,17 @@ class FirestoreClient(DatabaseInterface):
         return invitations
 
     async def list_pending_invitations_for_team(self, team_id: str) -> List[PendingInvitation]:
-        """List all pending invitations for a team."""
+        """List all pending invitations for a team using collection group query."""
         invitations = []
-        invitations_root = self.db.collection('invitations')
+        # Use collection group query on all 'teams' subcollections filtered by teamId
+        query = self.db.collection_group('teams').where('teamId', '==', team_id)
 
-        async for invitation_doc in invitations_root.stream():
-            email = invitation_doc.id
-            team_invitation_ref = invitation_doc.reference.collection('teams').document(team_id)
-            team_invitation_doc = await team_invitation_ref.get()
-
-            if not team_invitation_doc.exists:
+        async for doc in query.stream():
+            data = doc.to_dict()
+            if not data:
                 continue
-
-            data = team_invitation_doc.to_dict()
             invitations.append(PendingInvitation(
-                email=data.get('email', email),
+                email=data.get('email', ''),
                 team_id=data['teamId'],
                 role=Role(data['role']),
                 invited_by=data['invitedBy'],

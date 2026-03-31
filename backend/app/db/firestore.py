@@ -762,7 +762,7 @@ class FirestoreClient(DatabaseInterface):
             team_id=data['teamId'],
             name=data['name'],
             token=data['token'],
-            period_seconds=int(data['periodSeconds']),
+            period_seconds=int(data['periodSeconds']) if data.get('periodSeconds') is not None else 0,
             grace_seconds=int(data['graceSeconds']),
             status=CheckStatus(data['status']),
             created_at=data['createdAt'],

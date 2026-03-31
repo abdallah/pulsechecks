@@ -1,5 +1,5 @@
 """Request models for API validation."""
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional
 import re
 
@@ -75,6 +75,8 @@ class CreateCheckRequest(BaseModel):
 
 class UpdateCheckRequest(BaseModel):
     """Request to update a check."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     period_seconds: Optional[int] = Field(None, ge=60, le=31536000, alias="periodSeconds")

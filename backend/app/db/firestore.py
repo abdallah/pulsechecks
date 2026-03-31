@@ -316,6 +316,7 @@ class FirestoreClient(DatabaseInterface):
             'schedule': check.schedule,
             'url': check.url,
             'expectedStatusCode': check.expected_status_code,
+            'failureThreshold': check.failure_threshold,
         }
 
         # Remove None values

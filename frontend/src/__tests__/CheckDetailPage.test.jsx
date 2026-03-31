@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import CheckDetailPage from '../pages/CheckDetailPage'
@@ -11,6 +11,8 @@ vi.mock('../lib/api', () => ({
     getCheck: vi.fn(),
     listPings: vi.fn(),
     listAlertChannels: vi.fn(),
+    listTeams: vi.fn(),
+    updateCheck: vi.fn(),
   }
 }))
 
@@ -75,6 +77,7 @@ describe('CheckDetailPage', () => {
     vi.clearAllMocks()
     api.getCheck.mockResolvedValue(mockCheck)
     api.listAlertChannels.mockResolvedValue([])
+    api.listTeams.mockResolvedValue([])
   })
 
   const renderCheckDetailPage = () => {
@@ -132,5 +135,45 @@ describe('CheckDetailPage', () => {
 
     // Check empty state message
     expect(screen.getByText('No pings recorded yet')).toBeInTheDocument()
+  })
+
+  test('shows Edit button and modal for HTTP checks', async () => {
+    const httpCheck = {
+      ...mockCheck,
+      type: 'http',
+      url: 'https://example.com/health',
+      expectedStatusCode: 200,
+      expectedString: null,
+      failureThreshold: 1,
+    }
+    api.getCheck.mockResolvedValue(httpCheck)
+    api.listPings.mockResolvedValueOnce([])
+    api.updateCheck.mockResolvedValue({ ...httpCheck, url: 'https://example.com/new', expectedStatusCode: 201 })
+
+    renderCheckDetailPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Monitored URL')).toBeInTheDocument()
+    })
+
+    // Edit button should be visible
+    const editBtn = screen.getByRole('button', { name: /edit/i })
+    expect(editBtn).toBeInTheDocument()
+
+    // Open modal
+    fireEvent.click(editBtn)
+    expect(screen.getByText('Edit HTTP Check')).toBeInTheDocument()
+    expect(screen.getByLabelText('URL')).toBeInTheDocument()
+    expect(screen.getByLabelText('Expected Status Code')).toBeInTheDocument()
+
+    // Submit form
+    fireEvent.change(screen.getByLabelText('URL'), { target: { value: 'https://example.com/new' } })
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    await waitFor(() => {
+      expect(api.updateCheck).toHaveBeenCalledWith('team-123', 'check-123', expect.objectContaining({
+        url: 'https://example.com/new',
+      }))
+    })
   })
 })

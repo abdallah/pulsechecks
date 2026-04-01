@@ -72,3 +72,6 @@ secrets.txt
 samconfig.toml
 .claude/
 .claude/settings.local.json
+
+# Firebase cache
+frontend/.firebase/*.cache

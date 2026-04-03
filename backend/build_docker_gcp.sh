@@ -73,35 +73,27 @@ if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/nu
     exit 1
 fi
 
-# Configure Docker to use gcloud as credential helper
-print_info "Configuring Docker authentication for GCR..."
-gcloud auth configure-docker --quiet
-
-# Build Docker image
-print_info "Building Docker image: $FULL_IMAGE"
-docker build \
-    -f Dockerfile.cloudrun \
-    -t "$FULL_IMAGE" \
-    --platform linux/amd64 \
-    .
-
-if [ $? -ne 0 ]; then
-    print_error "Docker build failed"
-    exit 1
+# Use Cloud Build by default (avoids Docker network/DNS isolation issues in some environments)
+# Set FORCE_LOCAL_BUILD=1 to use local Docker instead
+if [ "${FORCE_LOCAL_BUILD}" = "1" ]; then
+    print_info "FORCE_LOCAL_BUILD=1: Using local Docker build..."
+    gcloud auth configure-docker --quiet
+    docker build \
+        -f Dockerfile.cloudrun \
+        -t "$FULL_IMAGE" \
+        --platform linux/amd64 \
+        .
+    docker push "$FULL_IMAGE"
+else
+    print_info "Using Cloud Build (set FORCE_LOCAL_BUILD=1 to use local Docker instead)..."
+    gcloud builds submit \
+        --tag "$FULL_IMAGE" \
+        --project "$PROJECT_ID" \
+        --timeout=20m \
+        .
 fi
 
-print_info "Docker build successful!"
-
-# Push to Google Container Registry
-print_info "Pushing image to Google Container Registry..."
-docker push "$FULL_IMAGE"
-
-if [ $? -ne 0 ]; then
-    print_error "Docker push failed"
-    exit 1
-fi
-
-print_info "Successfully pushed image to GCR!"
+print_info "Successfully built and pushed image to GCR!"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Image: $FULL_IMAGE"

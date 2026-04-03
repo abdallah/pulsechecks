@@ -102,18 +102,52 @@ if [ -n "$TF_HTTP_ADDRESS" ]; then
     print_info "Using HTTP backend (TF_HTTP_ADDRESS is set)"
     tofu init
 else
-    print_warning "TF_HTTP_ADDRESS is not set; using local OpenTofu state for this deployment"
-    tofu init -backend=false
+    print_warning "TF_HTTP_ADDRESS is not set; initializing with local state"
+    tofu init
 fi
 
 print_info "Applying OpenTofu configuration..."
 tofu apply -auto-approve
 
-# Get outputs
-CLOUDRUN_URL=$(tofu output -raw cloudrun_url)
-FIREBASE_WEB_API_KEY=$(tofu output -raw firebase_web_api_key)
-FIREBASE_AUTH_DOMAIN=$(tofu output -raw firebase_auth_domain)
+# Get outputs from Tofu state
+CLOUDRUN_URL=$(tofu output -raw cloudrun_url 2>/dev/null || true)
+FIREBASE_WEB_API_KEY=$(tofu output -raw firebase_web_api_key 2>/dev/null || true)
+FIREBASE_AUTH_DOMAIN=$(tofu output -raw firebase_auth_domain 2>/dev/null || true)
+
+# Fallback: derive Cloud Run URL from gcloud if tofu output failed
+if [ -z "$CLOUDRUN_URL" ]; then
+    print_warning "Could not read cloudrun_url from tofu output; fetching from gcloud..."
+    CLOUDRUN_URL=$(gcloud run services describe "pulsechecks-api-${ENVIRONMENT}" \
+        --region="$GCP_REGION" \
+        --project="$GCP_PROJECT_ID" \
+        --format='value(status.url)' 2>/dev/null || true)
+fi
+
+# Fallback: read Firebase API key from gcloud firebase config
+if [ -z "$FIREBASE_WEB_API_KEY" ]; then
+    print_warning "Could not read firebase_web_api_key from tofu output; fetching from Firebase project..."
+    FIREBASE_WEB_API_KEY=$(gcloud firebase projects:get "$GCP_PROJECT_ID" --format=json 2>/dev/null | \
+        python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('webApiKey',''))" 2>/dev/null || true)
+fi
+
+# Fallback for auth domain
+if [ -z "$FIREBASE_AUTH_DOMAIN" ]; then
+    FIREBASE_AUTH_DOMAIN="${GCP_PROJECT_ID}.firebaseapp.com"
+fi
+
+# Validate required values
+if [ -z "$CLOUDRUN_URL" ]; then
+    print_error "Could not determine Cloud Run URL. Set VITE_API_URL env var to override."
+    exit 1
+fi
+if [ -z "$FIREBASE_WEB_API_KEY" ]; then
+    print_error "Could not determine Firebase Web API key. Check Terraform outputs or Firebase project settings."
+    exit 1
+fi
+
 print_info "Infrastructure deployed successfully"
+print_info "Cloud Run URL: $CLOUDRUN_URL"
+print_info "Firebase Auth Domain: $FIREBASE_AUTH_DOMAIN"
 echo ""
 
 # Deploy Firestore indexes

@@ -36,11 +36,16 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Restrict to production frontend only
+allow_origins = ["https://pulsechecks.web.app"]
+if settings.debug:
+    allow_origins.extend(["http://localhost:3000", "http://127.0.0.1:3000"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=allow_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
 

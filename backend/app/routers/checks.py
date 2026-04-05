@@ -464,31 +464,6 @@ async def suppress_check_immediately(
     return OkResponse(message=f"Alerts suppressed for {check.suppress_duration_minutes} minutes")
 
 
-@router.post("/{check_id}/rotate-token", response_model=CheckDetailResponse)
-async def rotate_check_token(
-    team_id: str,
-    check_id: str,
-    current_user: AuthUser,
-    db: Database,
-) -> CheckDetailResponse:
-    """Rotate the token for a check (admin/owner only)."""
-    # Check team access (requires ADMIN permission for token rotation)
-    await check_team_access(team_id, current_user, db, Permission.ADMIN)
-
-    # Verify check exists
-    check = await db.get_check(team_id, check_id)
-    if not check:
-        raise NotFoundError("Check not found")
-
-    # Generate new token
-    new_token = generate_token()
-    
-    # Update check with new token
-    updated_check = await db.update_check(team_id, check_id, {"token": new_token})
-
-    return _check_detail_response(updated_check)
-
-
 @router.delete("/{check_id}", response_model=OkResponse)
 async def delete_check(
     team_id: str,

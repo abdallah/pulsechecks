@@ -320,10 +320,19 @@ def _validate_channel_configuration(channel_type: AlertChannelType, config: Dict
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"{channel_type.value.title()} channels require 'webhook_url' in configuration"
             )
-        if not config["webhook_url"].startswith(("http://", "https://")):
+        webhook_url = config["webhook_url"]
+        if not webhook_url.startswith(("http://", "https://")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"{channel_type.value.title()} webhook_url must start with http:// or https://"
+            )
+        # Validate webhook URL against SSRF attacks
+        try:
+            validate_webhook_url_strict(webhook_url)
+        except SSRFValidationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
             )
     elif channel_type == AlertChannelType.TELEGRAM:
         if "bot_token" not in config or "chat_id" not in config:

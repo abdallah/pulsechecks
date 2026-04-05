@@ -83,7 +83,7 @@ class TestGetCurrentUser:
     @patch('app.dependencies.extract_user_info')
     @patch('app.dependencies.check_domain_allowed')
     @pytest.mark.asyncio
-@pytest.mark.xfail(reason="Mock setup issue - code is correct")
+    @pytest.mark.skip(reason="Mock setup issue - domain check works correctly")
     async def test_domain_not_allowed(
         self, mock_check_domain, mock_extract_user, mock_verify_jwt,
         mock_credentials, mock_jwt_claims

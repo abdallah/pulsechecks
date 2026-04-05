@@ -163,6 +163,17 @@ async def get_alert_topic_details(
     sns = _get_sns_client()
 
     try:
+        # Verify topic belongs to this team by checking tags (ownership validation)
+        tags_response = sns.list_tags_for_resource(ResourceArn=topic_arn)
+        tags = {tag["Key"]: tag["Value"] for tag in tags_response.get("Tags", [])}
+
+        # Check Team or CreatedByTeam tag
+        if tags.get("Team") != team_id and tags.get("CreatedByTeam") != team_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Topic does not belong to this team",
+            )
+
         # Get topic attributes
         attrs_response = sns.get_topic_attributes(TopicArn=topic_arn)
         attributes = attrs_response.get("Attributes", {})
@@ -235,6 +246,17 @@ async def subscribe_to_alert_topic(
     sns = _get_sns_client()
 
     try:
+        # Verify topic belongs to this team by checking tags (ownership validation)
+        tags_response = sns.list_tags_for_resource(ResourceArn=topic_arn)
+        tags = {tag["Key"]: tag["Value"] for tag in tags_response.get("Tags", [])}
+
+        # Check Team or CreatedByTeam tag
+        if tags.get("Team") != team_id and tags.get("CreatedByTeam") != team_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Topic does not belong to this team",
+            )
+
         response = sns.subscribe(
             TopicArn=topic_arn,
             Protocol=protocol,

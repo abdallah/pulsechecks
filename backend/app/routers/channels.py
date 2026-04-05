@@ -9,6 +9,7 @@ from ..dependencies import get_current_user, get_db, check_team_access, AuthUser
 from ..models import AlertChannel, AlertChannelType, Permission
 from ..utils import get_iso_timestamp
 from ..config import get_settings
+from ..security import assert_webhook_url_safe
 
 router = APIRouter(prefix="/teams/{team_id}/channels", tags=["alert-channels"])
 
@@ -319,11 +320,14 @@ def _validate_channel_configuration(channel_type: AlertChannelType, config: Dict
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"{channel_type.value.title()} channels require 'webhook_url' in configuration"
             )
-        if not config["webhook_url"].startswith(("http://", "https://")):
+        webhook_url = config["webhook_url"]
+        if not webhook_url.startswith(("http://", "https://")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"{channel_type.value.title()} webhook_url must start with http:// or https://"
             )
+        # Validate webhook URL against SSRF attacks
+        assert_webhook_url_safe(webhook_url)
     elif channel_type == AlertChannelType.TELEGRAM:
         if "bot_token" not in config or "chat_id" not in config:
             raise HTTPException(

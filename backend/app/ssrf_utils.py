@@ -81,17 +81,30 @@ def validate_webhook_url(url: str) -> Tuple[bool, str]:
         # If we can't parse as IP, continue (might be a domain)
         pass
     
-    # Block localhost by name
-    if hostname.lower() in ("localhost", "127.0.0.1", "::1", "[::1]"):
+    # Block localhost by name and special domains
+    blocked_domains = {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+        "[::1]",
+        "localhost.local",
+        "localhost.localhost",
+    }
+    
+    hostname_lower = hostname.lower()
+    if hostname_lower in blocked_domains:
         return False, f"Loopback address blocked: {hostname}"
     
+    # Block .local and .localhost TLDs (often used for local services)
+    if hostname_lower.endswith(".local") or hostname_lower.endswith(".localhost"):
+        return False, f"Local domain blocked: {hostname}"
+    
     # Block bare IP addresses in private ranges (catch edge cases)
-    if hostname.replace(".", "").replace(":", "").isdigit() or ":" in hostname:
-        try:
-            if is_private_ip(hostname):
-                return False, f"Private IP blocked: {hostname}"
-        except Exception:
-            pass
+    try:
+        if is_private_ip(hostname):
+            return False, f"Private IP blocked: {hostname}"
+    except Exception:
+        pass
     
     return True, ""
 

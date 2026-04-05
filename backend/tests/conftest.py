@@ -51,3 +51,11 @@ def sample_check_data():
         "status": "up",
         "created_at": "2025-01-01T00:00:00Z",
     }
+
+
+@pytest.fixture
+def client():
+    """FastAPI TestClient for integration tests."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    return TestClient(app)

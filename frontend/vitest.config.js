@@ -7,5 +7,13 @@ export default defineConfig({
     globals: true,
     environment: 'happy-dom',
     setupFiles: './src/setupTests.js',
+    // Suppress non-critical React warnings in CI
+    onConsoleLog(log) {
+      if (log.includes('Warning: An update') ||
+          log.includes('act(...)') ||
+          log.includes('coroutine')) {
+        return false;
+      }
+    },
   },
 })

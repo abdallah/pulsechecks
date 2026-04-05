@@ -9,6 +9,7 @@ from ..dependencies import get_current_user, get_db, check_team_access, AuthUser
 from ..models import AlertChannel, AlertChannelType, Permission
 from ..utils import get_iso_timestamp
 from ..config import get_settings
+from ..ssrf_utils import validate_webhook_url_strict, SSRFValidationError
 
 router = APIRouter(prefix="/teams/{team_id}/channels", tags=["alert-channels"])
 

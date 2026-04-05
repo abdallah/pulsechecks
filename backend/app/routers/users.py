@@ -10,13 +10,18 @@ from fastapi import APIRouter, HTTPException, status
 from ..dependencies import AuthUser, Database
 from ..models import UserResponse, User, TeamMember, Role
 from ..utils import get_iso_timestamp
+from ..config import get_settings
 
 router = APIRouter(prefix="/me", tags=["users"])
 
 
 @router.get("/debug/versions")
 async def get_runtime_versions():
-    """Debug endpoint to check installed package versions."""
+    """Debug endpoint to check installed package versions (debug mode only)."""
+    settings = get_settings()
+    if not settings.debug:
+        raise HTTPException(status_code=404, detail="Not found")
+    
     try:
         versions = {}
         packages = ['aioboto3', 'aiobotocore', 'boto3', 'botocore']

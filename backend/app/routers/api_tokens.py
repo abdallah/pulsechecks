@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from ..dependencies import AuthUser, Database, check_team_access
 from ..models import Permission
 from ..utils import get_iso_timestamp
+from ..utils.token_security import timing_safe_compare, validate_token_entropy, validate_token_format
 
 router = APIRouter(prefix="/teams/{team_id}/api-tokens", tags=["api-tokens"])
 
@@ -22,7 +23,24 @@ def _generate_token() -> str:
 
 
 def _hash_token(token: str) -> str:
+    """Hash token using SHA256. Always use with timing_safe_compare()."""
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _validate_token_creation(token: str) -> tuple[bool, str]:
+    """Validate token has proper format and entropy."""
+    # Check format
+    is_valid, reason = validate_token_format(token)
+    if not is_valid:
+        return False, reason
+    
+    # Check entropy (token from os.urandom is cryptographically secure)
+    # Extract hex part and convert to bytes
+    hex_part = token[3:]  # Remove 'pc_' prefix
+    token_bytes = bytes.fromhex(hex_part)
+    is_valid, reason = validate_token_entropy(token_bytes, min_bytes=32)
+    
+    return is_valid, reason
 
 
 @router.post("", response_model=Dict[str, Any])
@@ -41,6 +59,13 @@ async def create_api_token(
         raise HTTPException(status_code=422, detail="name is required")
 
     token = _generate_token()
+    
+    # Validate token entropy and format
+    is_valid, reason = _validate_token_creation(token)
+    if not is_valid:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"Token generation failed: {reason}")
+    
     token_id = str(uuid.uuid4())
     now = get_iso_timestamp()
 

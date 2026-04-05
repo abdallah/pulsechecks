@@ -2,7 +2,7 @@
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, Any, Optional
 import uuid
 from contextvars import ContextVar
@@ -18,7 +18,7 @@ class StructuredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON."""
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),

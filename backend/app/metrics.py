@@ -1,7 +1,7 @@
 """CloudWatch metrics for monitoring and observability."""
 import boto3
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 from .config import get_settings
 from .logging_config import get_logger
 
@@ -24,7 +24,7 @@ class MetricsClient:
                 'MetricName': metric_name,
                 'Value': value,
                 'Unit': unit,
-                'Timestamp': datetime.utcnow()
+                'Timestamp': datetime.now(UTC)
             }
             
             if dimensions:

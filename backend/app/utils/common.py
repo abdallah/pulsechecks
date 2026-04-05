@@ -69,3 +69,20 @@ def generate_token() -> str:
 def generate_id() -> str:
     """Generate a secure random ID."""
     return secrets.token_urlsafe(16)
+
+
+def generate_slug(name: str) -> str:
+    """
+    Generate a URL-friendly slug from a check name.
+    Converts to lowercase, replaces spaces/special chars with hyphens.
+    """
+    import re
+    # Convert to lowercase
+    slug = name.lower()
+    # Replace spaces and underscores with hyphens
+    slug = re.sub(r'[\s_]+', '-', slug)
+    # Remove any characters that aren't alphanumeric or hyphens
+    slug = re.sub(r'[^a-z0-9-]', '', slug)
+    # Remove leading/trailing hyphens and collapse multiple hyphens
+    slug = re.sub(r'-+', '-', slug).strip('-')
+    return slug or 'check'  # fallback if empty after processing

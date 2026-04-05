@@ -301,6 +301,7 @@ class FirestoreClient(DatabaseInterface):
             'teamId': check.team_id,
             'name': check.name,
             'token': check.token,
+            'slug': check.slug,
             'periodSeconds': check.period_seconds,
             'graceSeconds': check.grace_seconds,
             'status': check.status.value,
@@ -319,8 +320,8 @@ class FirestoreClient(DatabaseInterface):
             'failureThreshold': check.failure_threshold,
         }
 
-        # Remove None values
-        data = {k: v for k, v in data.items() if v is not None}
+        # Remove None values (but keep slug and other important fields)
+        data = {k: v for k, v in data.items() if v is not None or k in ['slug']}
 
         await doc_ref.set(data)
 
@@ -344,6 +345,18 @@ class FirestoreClient(DatabaseInterface):
         """Get check by ping token."""
         checks_ref = self.db.collection('checks')
         query = checks_ref.where('token', '==', token).limit(1)
+        docs = await query.get()
+
+        if not docs:
+            return None
+
+        data = docs[0].to_dict()
+        return self._dict_to_check(data)
+
+    async def get_check_by_slug(self, team_id: str, slug: str) -> Optional[Check]:
+        """Get check by slug (friendly name) for a specific team."""
+        checks_ref = self.db.collection('checks')
+        query = checks_ref.where('teamId', '==', team_id).where('slug', '==', slug).limit(1)
         docs = await query.get()
 
         if not docs:
@@ -763,6 +776,7 @@ class FirestoreClient(DatabaseInterface):
             team_id=data['teamId'],
             name=data['name'],
             token=data['token'],
+            slug=data.get('slug'),
             period_seconds=int(data['periodSeconds']) if data.get('periodSeconds') is not None else 0,
             grace_seconds=int(data['graceSeconds']),
             status=CheckStatus(data['status']),

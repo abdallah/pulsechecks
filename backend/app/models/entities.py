@@ -68,6 +68,7 @@ class Check(BaseModel):
     team_id: str
     name: str
     token: str
+    slug: Optional[str] = None  # Friendly slug for ping URLs (auto-generated from name, unique per team)
     period_seconds: Optional[int] = None   # heartbeat + http only
     schedule: Optional[str] = None          # cron only (e.g. "0 2 * * *")
     grace_seconds: int
@@ -110,6 +111,7 @@ class Ping(BaseModel):
     timestamp: str
     received_at: str
     ping_type: str = "success"  # success, fail, or start
+    code: Optional[str] = None  # Error code (max 50 chars, alphanumeric + underscore)
     data: Optional[str] = None
 
 

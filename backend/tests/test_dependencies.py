@@ -64,7 +64,7 @@ class TestGetCurrentUser:
         
         mock_verify_jwt.assert_called_once_with("mock-jwt-token")
         mock_extract_user.assert_called_once_with(mock_jwt_claims)
-        # Domain check is currently disabled in code, so don't assert it was called
+        mock_check_domain.assert_called_once_with("test@example.com")
 
     @patch('app.dependencies.verify_jwt_token')
     @pytest.mark.asyncio
@@ -93,12 +93,11 @@ class TestGetCurrentUser:
         mock_extract_user.return_value = ("user-123", "test@blocked.com", "Test User", True)
         mock_check_domain.return_value = False
 
-        # Execute - should NOT raise exception because domain check is disabled
-        result = await get_current_user(mock_credentials)
+        # Execute - should raise ForbiddenError because domain is not allowed
+        with pytest.raises(ForbiddenError) as exc_info:
+            await get_current_user(mock_credentials)
         
-        # Verify user was created despite blocked domain (domain check disabled)
-        assert result.user_id == "user-123"
-        assert result.email == "test@blocked.com"
+        assert "Email domain not allowed" in str(exc_info.value)
 
     @patch('app.dependencies.verify_jwt_token')
     @patch('app.dependencies.extract_user_info')

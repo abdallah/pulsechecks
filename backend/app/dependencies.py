@@ -70,9 +70,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user_id, email, name, email_verified = extract_user_info(claims)
         print(f"DEBUG: Extracted user info - ID: {user_id}, Email: {email}, Name: {name}")
         
-        # Check domain allowlist - temporarily disabled for debugging
-        # if not check_domain_allowed(email):
-        #     raise ForbiddenError("Email domain not allowed")
+        # Check domain allowlist
+        if not check_domain_allowed(email):
+            raise ForbiddenError("Email domain not allowed")
         
         return CurrentUser(user_id=user_id, email=email, name=name)
         

@@ -210,3 +210,121 @@ async def record_ping_start(
 ) -> OkResponse:
     """Record a start ping - job has started (public endpoint)."""
     return await _record_ping_internal(token, db, PingType.START, data)
+
+
+@router.get("/{token}/{code}", response_model=OkResponse)
+@router.post("/{token}/{code}", response_model=OkResponse)
+async def record_ping_fail_with_code(
+    token: str,
+    code: str,
+    db: Database,
+    data: Optional[str] = Body(default=None, embed=True),
+) -> OkResponse:
+    """Record a failure ping with optional error code (e.g., /ping/token/500, /ping/token/OOM).
+    Error code: max 50 chars, alphanumeric + underscore.
+    """
+    import re
+    
+    # Validate code format
+    if not re.match(r'^[a-zA-Z0-9_]{1,50}$', code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Error code must be 1-50 alphanumeric characters or underscores",
+        )
+    
+    # Record ping as failure
+    metrics = get_metrics_client()
+    check = await db.get_check_by_token(token)
+    
+    if not check:
+        metrics.increment_counter('PingFailed', {'Reason': 'CheckNotFound'})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Check not found",
+        )
+    
+    # Record ping with code
+    timestamp = get_iso_timestamp()
+    ping = Ping(
+        check_id=check.check_id,
+        timestamp=timestamp,
+        received_at=timestamp,
+        ping_type=PingType.FAIL.value,
+        code=code,  # Store the error code
+        data=data,
+    )
+    await db.create_ping(ping)
+    
+    # Update check status
+    current_time_seconds = get_current_time_seconds()
+    if check.type == 'cron' and check.schedule:
+        next_due = calculate_next_due_from_cron(check.schedule, current_time_seconds)
+    else:
+        next_due = calculate_next_due(current_time_seconds, check.period_seconds)
+    
+    updates = {
+        "lastPingAt": timestamp,
+        "nextDueAt": next_due,
+        "alertAfterAt": next_due + check.grace_seconds,
+        "status": CheckStatus.LATE.value,
+    }
+    
+    await db.update_check_on_ping(check.team_id, check.check_id, updates)
+    metrics.ping_received(check.team_id, check.check_id, False)
+    
+    return OkResponse(message=f"Failure recorded with code: {code}")
+
+
+@router.get("/by-slug/{slug}/success", response_model=OkResponse)
+@router.post("/by-slug/{slug}/success", response_model=OkResponse)
+async def record_ping_by_slug_success(
+    slug: str,
+    db: Database,
+    team_id: Optional[str] = None,
+) -> OkResponse:
+    """Record a successful ping using check slug instead of token.
+    Usage: /ping/by-slug/backup-job/success
+    """
+    # For now, we need team_id to make slug lookup unique
+    # In real usage, this would come from auth context
+    if not team_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="team_id is required for slug-based pinging",
+        )
+    
+    check = await db.get_check_by_slug(team_id, slug)
+    if not check:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Check not found",
+        )
+    
+    return await _record_ping_internal(check.token, db, PingType.SUCCESS)
+
+
+@router.get("/by-slug/{slug}/fail", response_model=OkResponse)
+@router.post("/by-slug/{slug}/fail", response_model=OkResponse)
+async def record_ping_by_slug_fail(
+    slug: str,
+    db: Database,
+    team_id: Optional[str] = None,
+    data: Optional[str] = Body(default=None, embed=True),
+) -> OkResponse:
+    """Record a failure ping using check slug instead of token.
+    Usage: /ping/by-slug/backup-job/fail
+    """
+    if not team_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="team_id is required for slug-based pinging",
+        )
+    
+    check = await db.get_check_by_slug(team_id, slug)
+    if not check:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Check not found",
+        )
+    
+    return await _record_ping_internal(check.token, db, PingType.FAIL, data)

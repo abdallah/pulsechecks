@@ -6,7 +6,7 @@ from ..dependencies import AuthUser, Database, check_team_access
 from ..errors import NotFoundError, ValidationError
 from ..logging_config import get_logger, log_business_event
 from ..metrics import get_metrics_client
-from ..utils import generate_token, get_iso_timestamp, get_current_time_seconds
+from ..utils import generate_token, get_iso_timestamp, get_current_time_seconds, generate_slug
 
 logger = get_logger(__name__)
 from ..models import (
@@ -168,6 +168,11 @@ async def create_check(
     # Generate check ID and token
     check_id = generate_id()
     token = generate_token()
+    
+    # Auto-generate slug from name
+    slug = generate_slug(request.name)
+    
+    # TODO: Ensure slug uniqueness per team (handle duplicates with -2, -3, etc)
 
     # Create check
     check = Check(
@@ -175,6 +180,7 @@ async def create_check(
         team_id=team_id,
         name=request.name,
         token=token,
+        slug=slug,
         period_seconds=request.period_seconds,
         schedule=request.schedule,
         grace_seconds=request.grace_seconds,
@@ -191,12 +197,13 @@ async def create_check(
     if request.type == "cron":
         check.next_due_at = str(calculate_next_due_from_cron(request.schedule))
         check.alert_after_at = str(int(check.next_due_at) + request.grace_seconds)
+    
     await db.create_check(check)
     
     # Record metrics and log business event
     metrics = get_metrics_client()
     metrics.check_created(team_id)
-    log_business_event('check_created', team_id=team_id, check_id=check_id, check_name=request.name)
+    log_business_event('check_created', team_id=team_id, check_id=check_id, check_name=request.name, slug=slug)
 
     return _check_detail_response(check)
 

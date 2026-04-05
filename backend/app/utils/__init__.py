@@ -9,6 +9,7 @@ from .common import (
     validate_cron_expression,
     generate_token,
     generate_id,
+    generate_slug,
 )
 from .retry import with_retry, RetryConfig, retry_async
 from .circuit_breaker import CircuitBreaker, with_circuit_breaker, CircuitBreakerError
@@ -23,6 +24,7 @@ __all__ = [
     "validate_cron_expression",
     "generate_token",
     "generate_id",
+    "generate_slug",
     "with_retry",
     "RetryConfig",
     "retry_async",

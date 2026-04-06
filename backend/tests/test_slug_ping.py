@@ -234,6 +234,28 @@ class TestCleanSlugPingRoutes:
             assert response.status_code == 200
             assert response.json()["ok"] is True
 
+    def test_shorthand_get(self, client, mock_team, mock_check):
+        """GET /ping/{team_slug}/{check_slug} (no action suffix) defaults to success."""
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = _mock_db_for_slug(mock_team, mock_check)
+            mock_create_db.return_value = db
+
+            response = client.get("/ping/my-team/daily-backup")
+
+            assert response.status_code == 200
+            assert response.json()["ok"] is True
+
+    def test_shorthand_post(self, client, mock_team, mock_check):
+        """POST /ping/{team_slug}/{check_slug} defaults to success."""
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = _mock_db_for_slug(mock_team, mock_check)
+            mock_create_db.return_value = db
+
+            response = client.post("/ping/my-team/daily-backup")
+
+            assert response.status_code == 200
+            assert response.json()["ok"] is True
+
     def test_unknown_team_slug_returns_404(self, client):
         with patch("app.dependencies.create_db_client") as mock_create_db:
             db = MagicMock()
@@ -270,6 +292,56 @@ class TestCleanSlugPingRoutes:
 
 
 # ── Legacy by-slug routes (backward compat) ──────────────────────────────────
+
+class TestTokenCodeFallback:
+    """Two-segment handler falls back to token+code when slug lookup fails."""
+
+    def test_token_plus_code_still_works(self, client, mock_check):
+        """/{token}/{code} still records failure when slug lookup returns nothing."""
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = MagicMock()
+            mock_create_db.return_value = db
+            # Slug lookup fails
+            db.get_check_by_team_slug_and_check_slug = AsyncMock(return_value=None)
+            # Token lookup succeeds
+            db.get_check_by_token = AsyncMock(return_value=mock_check)
+            db.create_ping = AsyncMock()
+            db.update_check_on_ping = AsyncMock(return_value=True)
+
+            response = client.get(f"/ping/{mock_check.token}/500")
+
+            assert response.status_code == 200
+            assert "500" in response.json()["message"]
+
+    def test_token_plus_invalid_code_returns_400(self, client):
+        """Invalid code format returns 400 even after slug miss."""
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = MagicMock()
+            mock_create_db.return_value = db
+            db.get_check_by_team_slug_and_check_slug = AsyncMock(return_value=None)
+
+            response = client.get("/ping/some-token/invalid code!")
+
+            assert response.status_code == 400
+
+    def test_slug_takes_priority_over_token(self, client, mock_team, mock_check):
+        """When slug lookup succeeds, it wins over token+code interpretation.
+        get_check_by_team_slug_and_check_slug is called first; if it returns
+        a check, get_check_by_token is only called internally by _record_ping_internal
+        (not as the two-segment fallback path).
+        """
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = _mock_db_for_slug(mock_team, mock_check)
+            mock_create_db.return_value = db
+
+            response = client.get("/ping/my-team/daily-backup")
+
+            assert response.status_code == 200
+            # Slug lookup must have been attempted first
+            db.get_check_by_team_slug_and_check_slug.assert_called_once_with(
+                "my-team", "daily-backup"
+            )
+
 
 class TestLegacyBySlugRoutes:
     """Legacy /ping/by-slug/{slug}?team_id= routes still work."""

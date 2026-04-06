@@ -212,37 +212,42 @@ async def record_ping_start(
     return await _record_ping_internal(token, db, PingType.START, data)
 
 
-@router.get("/{token}/{code}", response_model=OkResponse)
-@router.post("/{token}/{code}", response_model=OkResponse)
-async def record_ping_fail_with_code(
-    token: str,
-    code: str,
+@router.get("/{first}/{second}", response_model=OkResponse)
+@router.post("/{first}/{second}", response_model=OkResponse)
+async def record_ping_two_segment(
+    first: str,
+    second: str,
     db: Database,
     data: Optional[str] = Body(default=None, embed=True),
 ) -> OkResponse:
-    """Record a failure ping with optional error code (e.g., /ping/token/500, /ping/token/OOM).
-    Error code: max 50 chars, alphanumeric + underscore.
+    """Two-segment ping handler — resolves in order:
+    1. /ping/{team_slug}/{check_slug}  → success ping via name-based URL
+    2. /ping/{token}/{code}            → failure ping with error code (legacy)
     """
     import re
-    
-    # Validate code format
-    if not re.match(r'^[a-zA-Z0-9_]{1,50}$', code):
+
+    # ── 1. Try team_slug + check_slug lookup first ────────────────────────
+    check = await db.get_check_by_team_slug_and_check_slug(first, second)
+    if check:
+        return await _record_ping_internal(check.token, db, PingType.SUCCESS)
+
+    # ── 2. Fall back to token + error code ───────────────────────────────
+    if not re.match(r'^[a-zA-Z0-9_]{1,50}$', second):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Error code must be 1-50 alphanumeric characters or underscores",
         )
-    
-    # Record ping as failure
+
     metrics = get_metrics_client()
-    check = await db.get_check_by_token(token)
-    
+    check = await db.get_check_by_token(first)
+
     if not check:
         metrics.increment_counter('PingFailed', {'Reason': 'CheckNotFound'})
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Check not found",
         )
-    
+
     # Record ping with code
     timestamp = get_iso_timestamp()
     ping = Ping(
@@ -250,29 +255,28 @@ async def record_ping_fail_with_code(
         timestamp=timestamp,
         received_at=timestamp,
         ping_type=PingType.FAIL.value,
-        code=code,  # Store the error code
+        code=second,
         data=data,
     )
     await db.create_ping(ping)
-    
-    # Update check status
+
     current_time_seconds = get_current_time_seconds()
     if check.type == 'cron' and check.schedule:
         next_due = calculate_next_due_from_cron(check.schedule, current_time_seconds)
     else:
         next_due = calculate_next_due(current_time_seconds, check.period_seconds)
-    
+
     updates = {
         "lastPingAt": timestamp,
         "nextDueAt": next_due,
         "alertAfterAt": next_due + check.grace_seconds,
         "status": CheckStatus.LATE.value,
     }
-    
+
     await db.update_check_on_ping(check.team_id, check.check_id, updates)
     metrics.ping_received(check.team_id, check.check_id, False)
-    
-    return OkResponse(message=f"Failure recorded with code: {code}")
+
+    return OkResponse(message=f"Failure recorded with code: {second}")
 
 
 @router.get("/by-slug/{slug}/success", response_model=OkResponse)
@@ -349,6 +353,4 @@ async def record_ping_by_team_and_check_slug_fail(
     return await _record_ping_internal(check.token, db, PingType.FAIL, data)
 
 
-# Note: /{team_slug}/{check_slug} shorthand is intentionally omitted — it would
-# be ambiguous with the existing /{token}/{code} error-code route. Always use
-# an explicit action suffix: /success or /fail.
+

@@ -20,7 +20,7 @@ function getPingBaseUrl() {
 }
 
 function slugPingUrl(baseUrl, teamSlug, checkSlug) {
-  return `${baseUrl}/ping/${teamSlug}/${checkSlug}/success`
+  return `${baseUrl}/ping/${teamSlug}/${checkSlug}`
 }
 
 export default function CheckDetailPage({ user, onLogout }) {
@@ -410,7 +410,7 @@ export default function CheckDetailPage({ user, onLogout }) {
                       </button>
                     </dd>
                     <p className="mt-1 text-xs text-gray-500">
-                      Replace <code className="bg-gray-100 px-1 rounded">/success</code> with <code className="bg-gray-100 px-1 rounded">/fail</code> to record a failure.
+                      Defaults to success. Append <code className="bg-gray-100 px-1 rounded">/fail</code> to record a failure.
                       Token URL is more secure; slug URL is easier to read in scripts.
                     </p>
                   </div>

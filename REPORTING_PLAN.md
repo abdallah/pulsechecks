@@ -338,7 +338,7 @@ class S3ReportStorage(ReportStorage):    # CLOUD_PROVIDER=aws
 
 | # | Decision | Resolution |
 |---|----------|------------|
-| 1 | Ping retention | **TBD** — 90 days proposed, pending confirmation |
+| 1 | Ping retention | **90 days** (daily cleanup cron deletes older pings) |
 | 2 | Non-HTTP check charts | **Ping interval regularity** (time between pings vs expected period) |
 | 3 | Uptime SLA thresholds | **≥99.9% green / ≥99% amber / <99% red** |
 | 4 | Report granularity | **Per-ping ≤7d / hourly avg 7–30d / daily avg 30–90d** |

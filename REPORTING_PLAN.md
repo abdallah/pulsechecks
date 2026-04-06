@@ -259,9 +259,24 @@ For each report type:
 Generation is synchronous for small ranges (≤7 days). For larger ranges, generate in background and poll.
 
 **4. Storage**
-- **GCP**: Generate file → upload to GCS → return signed URL (24h expiry)
-- **AWS**: Generate file → upload to S3 → return presigned URL (24h expiry)
-- Files cleaned up by a daily cron after expiry
+
+Abstracted behind a `ReportStorage` interface — same pattern as the DB layer:
+
+```python
+class ReportStorage(ABC):
+    async def upload(self, report_id: str, content: bytes, content_type: str) -> str:
+        """Upload report and return a signed/presigned download URL (24h expiry)."""
+
+class GCSReportStorage(ReportStorage):   # CLOUD_PROVIDER=gcp
+    """Upload to GCS bucket, return signed URL."""
+
+class S3ReportStorage(ReportStorage):    # CLOUD_PROVIDER=aws
+    """Upload to S3 bucket, return presigned URL."""
+```
+
+- `REPORT_BUCKET` env var set per deployment (GCS bucket name or S3 bucket name)
+- Factory: `create_report_storage()` returns the right impl based on `CLOUD_PROVIDER`
+- Files cleaned up by a daily cron after expiry (GCS Object Lifecycle / S3 Expiration rule)
 
 **5. Report formats**
 - **JSON**: machine-readable, can be consumed by other tools

@@ -9,6 +9,7 @@ import { renderWithToast } from './test-utils'
 vi.mock('../lib/api', () => ({
   api: {
     getCheck: vi.fn(),
+    getTeam: vi.fn().mockResolvedValue({ teamId: 'team-123', name: 'Test Team', slug: 'test-team' }),
     listPings: vi.fn(),
     listAlertChannels: vi.fn(),
     listTeams: vi.fn(),

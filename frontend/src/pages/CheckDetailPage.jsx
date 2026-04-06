@@ -19,8 +19,8 @@ function getPingBaseUrl() {
   return config.apiUrl
 }
 
-function slugPingUrl(baseUrl, slug, teamId) {
-  return `${baseUrl}/ping/by-slug/${slug}/success?team_id=${teamId}`
+function slugPingUrl(baseUrl, teamSlug, checkSlug) {
+  return `${baseUrl}/ping/${teamSlug}/${checkSlug}/success`
 }
 
 export default function CheckDetailPage({ user, onLogout }) {
@@ -35,6 +35,7 @@ export default function CheckDetailPage({ user, onLogout }) {
   const [showTokenRotated, setShowTokenRotated] = useState(false)
   const [availableTopics, setAvailableTopics] = useState([])
   const [availableChannels, setAvailableChannels] = useState([])
+  const [teamSlug, setTeamSlug] = useState(null)
   const [showAlertSettings, setShowAlertSettings] = useState(false)
   const [showEditHttpCheck, setShowEditHttpCheck] = useState(false)
   const [editHttpData, setEditHttpData] = useState({ url: '', expectedStatusCode: 200, expectedString: '', failureThreshold: 1 })
@@ -59,10 +60,12 @@ export default function CheckDetailPage({ user, onLogout }) {
 
   async function loadCheckData() {
     try {
-      const [checkData, pingsData] = await Promise.all([
+      const [checkData, pingsData, teamData] = await Promise.all([
         api.getCheck(teamId, checkId),
         api.listPings(teamId, checkId, 20),
+        api.getTeam(teamId),
       ])
+      if (teamData?.slug) setTeamSlug(teamData.slug)
       // Construct pingUrl from token if not provided by backend
       if (checkData.token && !checkData.pingUrl) {
         checkData.pingUrl = `${getPingBaseUrl()}/ping/${checkData.token}`
@@ -386,18 +389,18 @@ export default function CheckDetailPage({ user, onLogout }) {
                 </div>
 
                 {/* Slug-based URL */}
-                {check.slug && (
+                {check.slug && teamSlug && (
                   <div>
                     <dt className="text-sm font-medium text-gray-500">
                       Ping URL <span className="text-xs text-gray-400 font-normal">(name-based)</span>
                     </dt>
                     <dd className="mt-1 flex items-center space-x-2">
                       <code className="flex-1 text-sm text-gray-900 bg-gray-50 px-3 py-2 rounded border border-gray-200 overflow-x-auto">
-                        {slugPingUrl(getPingBaseUrl(), check.slug, teamId)}
+                        {slugPingUrl(getPingBaseUrl(), teamSlug, check.slug)}
                       </code>
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText(slugPingUrl(getPingBaseUrl(), check.slug, teamId))
+                          navigator.clipboard.writeText(slugPingUrl(getPingBaseUrl(), teamSlug, check.slug))
                           toast.success('Slug URL copied!')
                         }}
                         className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
@@ -407,8 +410,8 @@ export default function CheckDetailPage({ user, onLogout }) {
                       </button>
                     </dd>
                     <p className="mt-1 text-xs text-gray-500">
-                      Use <code className="bg-gray-100 px-1 rounded">/fail</code> instead of <code className="bg-gray-100 px-1 rounded">/success</code> to record a failure.
-                      Token URL is more secure (no team ID in URL); slug URL is easier to read in scripts.
+                      Replace <code className="bg-gray-100 px-1 rounded">/success</code> with <code className="bg-gray-100 px-1 rounded">/fail</code> to record a failure.
+                      Token URL is more secure; slug URL is easier to read in scripts.
                     </p>
                   </div>
                 )}
@@ -692,10 +695,10 @@ export default function CheckDetailPage({ user, onLogout }) {
           <h4 className="text-sm font-medium text-blue-900 mb-2">Usage Example</h4>
           <pre className="text-xs text-blue-800 bg-white p-3 rounded border border-blue-200 overflow-x-auto">
             {`# Token-based URL (secure)
-curl ${check.pingUrl}${check.slug ? `
+curl ${check.pingUrl}${check.slug && teamSlug ? `
 
 # Name-based URL (easier to read in scripts)
-curl ${slugPingUrl(getPingBaseUrl(), check.slug, teamId)}` : ''}
+curl ${slugPingUrl(getPingBaseUrl(), teamSlug, check.slug)}` : ''}
 
 # With data
 curl -X POST ${check.pingUrl} \\

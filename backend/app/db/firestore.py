@@ -119,6 +119,7 @@ class FirestoreClient(DatabaseInterface):
         await doc_ref.set({
             'teamId': team.team_id,
             'name': team.name,
+            'slug': team.slug,
             'createdAt': team.created_at,
             'createdBy': team.created_by,
             'mattermostWebhookUrl': team.mattermost_webhook_url or None,
@@ -137,11 +138,36 @@ class FirestoreClient(DatabaseInterface):
         return Team(
             team_id=data['teamId'],
             name=data['name'],
+            slug=data.get('slug'),
             created_at=data['createdAt'],
             created_by=data['createdBy'],
             mattermost_webhook_url=data.get('mattermostWebhookUrl'),
             mattermost_webhooks=data.get('mattermostWebhooks', []),
         )
+
+    async def get_team_by_slug(self, team_slug: str) -> Optional[Team]:
+        """Get team by slug."""
+        query = self.db.collection('teams').where('slug', '==', team_slug).limit(1)
+        docs = await query.get()
+        for doc in docs:
+            data = doc.to_dict()
+            return Team(
+                team_id=data['teamId'],
+                name=data['name'],
+                slug=data.get('slug'),
+                created_at=data['createdAt'],
+                created_by=data['createdBy'],
+                mattermost_webhook_url=data.get('mattermostWebhookUrl'),
+                mattermost_webhooks=data.get('mattermostWebhooks', []),
+            )
+        return None
+
+    async def get_check_by_team_slug_and_check_slug(self, team_slug: str, check_slug: str) -> Optional['Check']:
+        """Get check by team slug and check slug — used for human-friendly ping URLs."""
+        team = await self.get_team_by_slug(team_slug)
+        if not team:
+            return None
+        return await self.get_check_by_slug(team.team_id, check_slug)
 
     async def update_team(self, team: Team) -> None:
         """Update team information."""

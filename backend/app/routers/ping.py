@@ -282,24 +282,15 @@ async def record_ping_by_slug_success(
     db: Database,
     team_id: Optional[str] = None,
 ) -> OkResponse:
-    """Record a successful ping using check slug instead of token.
-    Usage: /ping/by-slug/backup-job/success
-    """
-    # For now, we need team_id to make slug lookup unique
-    # In real usage, this would come from auth context
+    """Record a successful ping using check slug (legacy — use /{team_slug}/{check_slug}/success instead)."""
     if not team_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="team_id is required for slug-based pinging",
         )
-    
     check = await db.get_check_by_slug(team_id, slug)
     if not check:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Check not found",
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check not found")
     return await _record_ping_internal(check.token, db, PingType.SUCCESS)
 
 
@@ -311,20 +302,64 @@ async def record_ping_by_slug_fail(
     team_id: Optional[str] = None,
     data: Optional[str] = Body(default=None, embed=True),
 ) -> OkResponse:
-    """Record a failure ping using check slug instead of token.
-    Usage: /ping/by-slug/backup-job/fail
-    """
+    """Record a failure ping using check slug (legacy — use /{team_slug}/{check_slug}/fail instead)."""
     if not team_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="team_id is required for slug-based pinging",
         )
-    
     check = await db.get_check_by_slug(team_id, slug)
     if not check:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Check not found",
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check not found")
     return await _record_ping_internal(check.token, db, PingType.FAIL, data)
+
+
+# ─── Clean slug routes: /ping/{team_slug}/{check_slug}/{action} ───────────────
+
+@router.get("/{team_slug}/{check_slug}/success", response_model=OkResponse)
+@router.post("/{team_slug}/{check_slug}/success", response_model=OkResponse)
+async def record_ping_by_team_and_check_slug_success(
+    team_slug: str,
+    check_slug: str,
+    db: Database,
+) -> OkResponse:
+    """Record a successful ping using team slug + check slug.
+    Usage: /ping/my-team/backup-job/success
+    """
+    check = await db.get_check_by_team_slug_and_check_slug(team_slug, check_slug)
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check not found")
+    return await _record_ping_internal(check.token, db, PingType.SUCCESS)
+
+
+@router.get("/{team_slug}/{check_slug}/fail", response_model=OkResponse)
+@router.post("/{team_slug}/{check_slug}/fail", response_model=OkResponse)
+async def record_ping_by_team_and_check_slug_fail(
+    team_slug: str,
+    check_slug: str,
+    db: Database,
+    data: Optional[str] = Body(default=None, embed=True),
+) -> OkResponse:
+    """Record a failure ping using team slug + check slug.
+    Usage: /ping/my-team/backup-job/fail
+    """
+    check = await db.get_check_by_team_slug_and_check_slug(team_slug, check_slug)
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check not found")
+    return await _record_ping_internal(check.token, db, PingType.FAIL, data)
+
+
+@router.get("/{team_slug}/{check_slug}", response_model=OkResponse)
+@router.post("/{team_slug}/{check_slug}", response_model=OkResponse)
+async def record_ping_by_team_and_check_slug(
+    team_slug: str,
+    check_slug: str,
+    db: Database,
+) -> OkResponse:
+    """Record a successful ping using team slug + check slug (shorthand, no action suffix).
+    Usage: /ping/my-team/backup-job
+    """
+    check = await db.get_check_by_team_slug_and_check_slug(team_slug, check_slug)
+    if not check:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check not found")
+    return await _record_ping_internal(check.token, db, PingType.SUCCESS)

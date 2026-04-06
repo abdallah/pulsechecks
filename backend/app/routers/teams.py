@@ -12,7 +12,7 @@ from ..models import (
     PendingInvitation,
     Permission,
 )
-from ..utils import generate_id, get_iso_timestamp
+from ..utils import generate_id, get_iso_timestamp, generate_slug
 from ..logging_config import log_business_event
 
 router = APIRouter(prefix="/teams", tags=["teams"])
@@ -25,13 +25,15 @@ async def create_team(
     db: Database,
 ) -> TeamResponse:
     """Create a new team."""
-    # Generate team ID
+    # Generate team ID and slug
     team_id = generate_id()
+    team_slug = generate_slug(request.name)
 
     # Create team
     team = Team(
         team_id=team_id,
         name=request.name,
+        slug=team_slug,
         created_at=get_iso_timestamp(),
         created_by=current_user.user_id,
     )
@@ -66,6 +68,7 @@ async def list_user_teams(
         {
             "teamId": item["team"].team_id,
             "name": item["team"].name,
+            "slug": item["team"].slug,
             "role": item["role"],
             "createdAt": item["team"].created_at,
         }
@@ -89,6 +92,7 @@ async def get_team(
     return {
         "teamId": team.team_id,
         "name": team.name,
+        "slug": team.slug,
         "createdAt": team.created_at,
         "createdBy": team.created_by,
     }

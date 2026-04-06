@@ -19,6 +19,7 @@ class Team(BaseModel):
 
     team_id: str
     name: str
+    slug: Optional[str] = None  # URL-friendly slug auto-generated from team name
     created_at: str
     created_by: str
     mattermost_webhook_url: Optional[str] = None  # Legacy field for backward compatibility

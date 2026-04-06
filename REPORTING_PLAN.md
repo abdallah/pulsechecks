@@ -266,7 +266,6 @@ Generation is synchronous for small ranges (≤7 days). For larger ranges, gener
 **5. Report formats**
 - **JSON**: machine-readable, can be consumed by other tools
 - **CSV**: spreadsheet-friendly, easy to open in Excel/Sheets
-- **PDF**: human-friendly summary page (use WeasyPrint in Cloud Run - no headless Chrome needed)
 
 ### Frontend changes
 - **"Reports" tab** on team settings page
@@ -314,32 +313,22 @@ Generation is synchronous for small ranges (≤7 days). For larger ranges, gener
 
 ### Phase 5 — Downloadable Reports
 1. `Report` entity + CRUD endpoints
-2. Report generators: uptime, errors, performance, summary (JSON + CSV)
+2. Report generators: uptime, errors, performance, summary (JSON + CSV only)
 3. GCS signed URL upload + expiry cleanup cron
-4. PDF generation via WeasyPrint
-5. Reports UI: form + progress polling + download list
+4. Reports UI: form + progress polling + download list
 
 ---
 
-## Open Questions / Decisions Needed
+## Decisions
 
-1. **Ping retention**: How long to keep raw ping data?
-   - 90 days is a good default
-   - Could make it configurable per team
-
-2. **Response time for non-HTTP checks**: Heartbeat/cron checks don’t have server-side response times. Show ping interval regularity instead (time between pings vs expected period).
-
-3. **Uptime SLA thresholds**: What % triggers amber vs red?
-   - Suggestion: ≥99.9% green, ≥99% amber, <99% red
-
-4. **Report granularity**: For 30-day charts, should we aggregate to hourly data points or keep per-ping resolution?
-   - Per-ping for ≤7 days
-   - Hourly averages for 7–30 days
-   - Daily averages for 30–90 days
-
-5. **Report expiry**: How long should generated files be available?
-   - 24h is a safe default (signed URLs are temporary by nature)
-   - Could offer 7-day retention for team admins
+| # | Decision | Resolution |
+|---|----------|------------|
+| 1 | Ping retention | **TBD** — 90 days proposed, pending confirmation |
+| 2 | Non-HTTP check charts | **Ping interval regularity** (time between pings vs expected period) |
+| 3 | Uptime SLA thresholds | **≥99.9% green / ≥99% amber / <99% red** |
+| 4 | Report granularity | **Per-ping ≤7d / hourly avg 7–30d / daily avg 30–90d** |
+| 5 | PDF export | **Not needed — CSV and JSON only** |
+| 6 | Report expiry | **24h signed URL** |
 
 ---
 
@@ -351,7 +340,7 @@ Generation is synchronous for small ranges (≤7 days). For larger ranges, gener
 | 2 - Response Time Graphs | 1h | 2-3h | 1h | ~5h |
 | 3 - Error Logs | 1h | 2h | 1h | ~4h |
 | 4 - Uptime Reports | 3-4h | 3-4h | 2h | ~9h |
-| 5 — Downloadable Reports | 3–4h | 2h | 1h | ~7h |
+| 5 - Downloadable Reports | 3-4h | 2h | 1h | ~7h |
 | **Total** | | | | **~29h** |
 
 Realistic across 2-3 sessions.

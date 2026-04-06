@@ -909,6 +909,7 @@ export default function ChecksPage({ user, onLogout }) {
                       Period
                     </label>
                     <DurationInput
+                      key={`period-${showQuickEdit}`}
                       id="quickEditPeriod"
                       value={quickEditData.periodSeconds}
                       onChange={(v) => setQuickEditData({ ...quickEditData, periodSeconds: v })}
@@ -923,6 +924,7 @@ export default function ChecksPage({ user, onLogout }) {
                       Grace Period
                     </label>
                     <DurationInput
+                      key={`grace-${showQuickEdit}`}
                       id="quickEditGrace"
                       value={quickEditData.graceSeconds}
                       onChange={(v) => setQuickEditData({ ...quickEditData, graceSeconds: v })}

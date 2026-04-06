@@ -156,12 +156,13 @@ describe('CheckDetailPage', () => {
       expect(screen.getByText('Monitored URL')).toBeInTheDocument()
     })
 
-    // Edit button should be visible
-    const editBtn = screen.getByRole('button', { name: /edit/i })
-    expect(editBtn).toBeInTheDocument()
+    // Edit button should be visible (HTTP check edit specifically)
+    const editButtons = screen.getAllByRole('button', { name: /edit/i })
+    const httpEditBtn = editButtons.find(btn => btn.textContent.includes('Edit') && btn.querySelector('svg'))
+    expect(httpEditBtn).toBeInTheDocument()
 
     // Open modal
-    fireEvent.click(editBtn)
+    fireEvent.click(httpEditBtn)
     expect(screen.getByText('Edit HTTP Check')).toBeInTheDocument()
     expect(screen.getByLabelText('URL')).toBeInTheDocument()
     expect(screen.getByLabelText('Expected Status Code')).toBeInTheDocument()

@@ -6,6 +6,7 @@ import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { config } from '../config'
 import { useToast } from '../components/Toast'
+import DurationInput from '../components/DurationInput'
 
 // Helper function to get the proper ping base URL (custom domain if available)
 function getPingBaseUrl() {
@@ -34,6 +35,12 @@ export default function CheckDetailPage({ user, onLogout }) {
   const [showEditHttpCheck, setShowEditHttpCheck] = useState(false)
   const [editHttpData, setEditHttpData] = useState({ url: '', expectedStatusCode: 200, expectedString: '', failureThreshold: 1 })
   const [editHttpLoading, setEditHttpLoading] = useState(false)
+  const [editingPeriod, setEditingPeriod] = useState(false)
+  const [editingGrace, setEditingGrace] = useState(false)
+  const [editPeriodSeconds, setEditPeriodSeconds] = useState(null)
+  const [editGraceSeconds, setEditGraceSeconds] = useState(null)
+  const [savingPeriod, setSavingPeriod] = useState(false)
+  const [savingGrace, setSavingGrace] = useState(false)
 
   useEffect(() => {
     loadCheckData()
@@ -209,6 +216,34 @@ export default function CheckDetailPage({ user, onLogout }) {
     setShowEditHttpCheck(true)
   }
 
+  async function handleSavePeriod() {
+    setSavingPeriod(true)
+    try {
+      const updated = await api.updateCheck(teamId, checkId, { periodSeconds: editPeriodSeconds })
+      setCheck(updated)
+      setEditingPeriod(false)
+      toast.success('Period updated')
+    } catch (error) {
+      toast.error('Failed to update period: ' + error.message)
+    } finally {
+      setSavingPeriod(false)
+    }
+  }
+
+  async function handleSaveGrace() {
+    setSavingGrace(true)
+    try {
+      const updated = await api.updateCheck(teamId, checkId, { graceSeconds: editGraceSeconds })
+      setCheck(updated)
+      setEditingGrace(false)
+      toast.success('Grace period updated')
+    } catch (error) {
+      toast.error('Failed to update grace period: ' + error.message)
+    } finally {
+      setSavingGrace(false)
+    }
+  }
+
   async function handleEditHttpCheck(e) {
     e.preventDefault()
     setEditHttpLoading(true)
@@ -372,19 +407,87 @@ export default function CheckDetailPage({ user, onLogout }) {
               )}
 
               <div>
-                <dt className="text-sm font-medium text-gray-500 flex items-center">
-                  <Clock className="h-4 w-4 mr-1" />
-                  Period
+                <dt className="text-sm font-medium text-gray-500 flex items-center justify-between">
+                  <span className="flex items-center"><Clock className="h-4 w-4 mr-1" />Period</span>
+                  {!editingPeriod && (
+                    <button
+                      onClick={() => { setEditPeriodSeconds(check.periodSeconds); setEditingPeriod(true) }}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </dt>
-                <dd className="mt-1 text-sm text-gray-900">{formatDuration(check.periodSeconds)}</dd>
+                <dd className="mt-1">
+                  {editingPeriod ? (
+                    <div className="flex items-center gap-2">
+                      <DurationInput
+                        key={`detail-period-${check.checkId}`}
+                        value={editPeriodSeconds}
+                        onChange={setEditPeriodSeconds}
+                        min={60}
+                        required
+                      />
+                      <button
+                        onClick={handleSavePeriod}
+                        disabled={savingPeriod}
+                        className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {savingPeriod ? '...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingPeriod(false)}
+                        className="text-xs px-2 py-1 border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-900">{formatDuration(check.periodSeconds)}</span>
+                  )}
+                </dd>
               </div>
 
               <div>
-                <dt className="text-sm font-medium text-gray-500 flex items-center">
-                  <Clock className="h-4 w-4 mr-1" />
-                  Grace Period
+                <dt className="text-sm font-medium text-gray-500 flex items-center justify-between">
+                  <span className="flex items-center"><Clock className="h-4 w-4 mr-1" />Grace Period</span>
+                  {!editingGrace && (
+                    <button
+                      onClick={() => { setEditGraceSeconds(check.graceSeconds); setEditingGrace(true) }}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </dt>
-                <dd className="mt-1 text-sm text-gray-900">{formatDuration(check.graceSeconds)}</dd>
+                <dd className="mt-1">
+                  {editingGrace ? (
+                    <div className="flex items-center gap-2">
+                      <DurationInput
+                        key={`detail-grace-${check.checkId}`}
+                        value={editGraceSeconds}
+                        onChange={setEditGraceSeconds}
+                        min={0}
+                        required
+                      />
+                      <button
+                        onClick={handleSaveGrace}
+                        disabled={savingGrace}
+                        className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {savingGrace ? '...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingGrace(false)}
+                        className="text-xs px-2 py-1 border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-900">{formatDuration(check.graceSeconds)}</span>
+                  )}
+                </dd>
               </div>
 
               <div>

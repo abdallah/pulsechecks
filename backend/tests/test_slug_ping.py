@@ -290,6 +290,53 @@ class TestCleanSlugPingRoutes:
             assert response.status_code == 200
             assert response.json()["ok"] is True
 
+    def test_start_action(self, client, mock_team, mock_check):
+        """Slug URL supports /start action (cron job start)."""
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = _mock_db_for_slug(mock_team, mock_check)
+            mock_create_db.return_value = db
+
+            response = client.get("/ping/my-team/daily-backup/start")
+
+            assert response.status_code == 200
+            assert response.json()["ok"] is True
+
+    def test_error_code_action(self, client, mock_team, mock_check):
+        """Slug URL supports error codes like /500, /OOM, /408."""
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = _mock_db_for_slug(mock_team, mock_check)
+            mock_create_db.return_value = db
+            db.create_ping = AsyncMock()
+            db.update_check_on_ping = AsyncMock(return_value=True)
+
+            response = client.get("/ping/my-team/daily-backup/500")
+
+            assert response.status_code == 200
+            assert "500" in response.json()["message"]
+
+    def test_error_code_action_OOM(self, client, mock_team, mock_check):
+        """Slug URL supports alphanumeric error codes."""
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = _mock_db_for_slug(mock_team, mock_check)
+            mock_create_db.return_value = db
+            db.create_ping = AsyncMock()
+            db.update_check_on_ping = AsyncMock(return_value=True)
+
+            response = client.get("/ping/my-team/daily-backup/OOM")
+
+            assert response.status_code == 200
+            assert "OOM" in response.json()["message"]
+
+    def test_invalid_action_returns_400(self, client, mock_team, mock_check):
+        """Invalid action (bad chars) returns 400."""
+        with patch("app.dependencies.create_db_client") as mock_create_db:
+            db = _mock_db_for_slug(mock_team, mock_check)
+            mock_create_db.return_value = db
+
+            response = client.get("/ping/my-team/daily-backup/bad action!")
+
+            assert response.status_code == 400
+
 
 # ── Legacy by-slug routes (backward compat) ──────────────────────────────────
 

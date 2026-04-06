@@ -410,8 +410,7 @@ export default function CheckDetailPage({ user, onLogout }) {
                       </button>
                     </dd>
                     <p className="mt-1 text-xs text-gray-500">
-                      Defaults to success. Append <code className="bg-gray-100 px-1 rounded">/fail</code> to record a failure.
-                      Token URL is more secure; slug URL is easier to read in scripts.
+                      Defaults to success. Supports the same actions as the token URL: <code className="bg-gray-100 px-1 rounded">/fail</code>, <code className="bg-gray-100 px-1 rounded">/start</code>, <code className="bg-gray-100 px-1 rounded">/500</code>, etc.
                     </p>
                   </div>
                 )}

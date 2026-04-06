@@ -320,37 +320,76 @@ async def record_ping_by_slug_fail(
 
 # ─── Clean slug routes: /ping/{team_slug}/{check_slug}/{action} ───────────────
 
-@router.get("/{team_slug}/{check_slug}/success", response_model=OkResponse)
-@router.post("/{team_slug}/{check_slug}/success", response_model=OkResponse)
-async def record_ping_by_team_and_check_slug_success(
+@router.get("/{team_slug}/{check_slug}/{action}", response_model=OkResponse)
+@router.post("/{team_slug}/{check_slug}/{action}", response_model=OkResponse)
+async def record_ping_by_slug_with_action(
     team_slug: str,
     check_slug: str,
-    db: Database,
-) -> OkResponse:
-    """Record a successful ping using team slug + check slug.
-    Usage: /ping/my-team/backup-job/success
-    """
-    check = await db.get_check_by_team_slug_and_check_slug(team_slug, check_slug)
-    if not check:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check not found")
-    return await _record_ping_internal(check.token, db, PingType.SUCCESS)
-
-
-@router.get("/{team_slug}/{check_slug}/fail", response_model=OkResponse)
-@router.post("/{team_slug}/{check_slug}/fail", response_model=OkResponse)
-async def record_ping_by_team_and_check_slug_fail(
-    team_slug: str,
-    check_slug: str,
+    action: str,
     db: Database,
     data: Optional[str] = Body(default=None, embed=True),
 ) -> OkResponse:
-    """Record a failure ping using team slug + check slug.
-    Usage: /ping/my-team/backup-job/fail
+    """Unified 3-segment slug handler — parity with all token-based actions.
+
+    Supported actions (mirrors token-based API exactly):
+      /ping/{team_slug}/{check_slug}/success  — record success
+      /ping/{team_slug}/{check_slug}/fail     — record failure
+      /ping/{team_slug}/{check_slug}/start    — record job start (cron)
+      /ping/{team_slug}/{check_slug}/500      — record failure with error code
     """
+    import re
+
     check = await db.get_check_by_team_slug_and_check_slug(team_slug, check_slug)
     if not check:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check not found")
-    return await _record_ping_internal(check.token, db, PingType.FAIL, data)
+
+    if action in ("success", "ok"):
+        return await _record_ping_internal(check.token, db, PingType.SUCCESS)
+
+    if action == "fail":
+        return await _record_ping_internal(check.token, db, PingType.FAIL, data)
+
+    if action == "start":
+        return await _record_ping_internal(check.token, db, PingType.START, data)
+
+    # Treat anything else as an error code (e.g. /500, /OOM, /408)
+    if not re.match(r'^[a-zA-Z0-9_]{1,50}$', action):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unknown action. Use: success, fail, start, or an error code (e.g. 500).",
+        )
+
+    # Record failure with error code
+    metrics = get_metrics_client()
+    timestamp = get_iso_timestamp()
+    current_time_seconds = get_current_time_seconds()
+
+    from ..models.entities import Ping as PingEntity
+    ping = PingEntity(
+        check_id=check.check_id,
+        timestamp=timestamp,
+        received_at=timestamp,
+        ping_type=PingType.FAIL.value,
+        code=action,
+        data=data,
+    )
+    await db.create_ping(ping)
+
+    if check.type == 'cron' and check.schedule:
+        next_due = calculate_next_due_from_cron(check.schedule, current_time_seconds)
+    else:
+        next_due = calculate_next_due(current_time_seconds, check.period_seconds)
+
+    updates = {
+        "lastPingAt": timestamp,
+        "nextDueAt": next_due,
+        "alertAfterAt": next_due + check.grace_seconds,
+        "status": CheckStatus.LATE.value,
+    }
+    await db.update_check_on_ping(check.team_id, check.check_id, updates)
+    metrics.ping_received(check.team_id, check.check_id, False)
+
+    return OkResponse(message=f"Failure recorded with code: {action}")
 
 
 

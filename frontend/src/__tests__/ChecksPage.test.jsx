@@ -509,7 +509,7 @@ describe('ChecksPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Quick Edit Check')).toBeInTheDocument();
       expect(screen.getByDisplayValue('Test Check')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('60')).toBeInTheDocument(); // 3600 seconds = 60 minutes
+      expect(screen.getByDisplayValue('1')).toBeInTheDocument(); // 3600 seconds = 1 hour (auto-detected)
       expect(screen.getByDisplayValue('5')).toBeInTheDocument(); // 300 seconds = 5 minutes
     });
   });
@@ -549,8 +549,8 @@ describe('ChecksPage', () => {
     const nameInput = screen.getByDisplayValue('Test Check');
     fireEvent.change(nameInput, { target: { value: 'Updated Check Name' } });
 
-    const periodInput = screen.getByDisplayValue('60'); // 3600 seconds displayed as 60 minutes
-    fireEvent.change(periodInput, { target: { value: '120' } }); // 120 minutes = 7200 seconds
+    const periodInput = screen.getByDisplayValue('1'); // 3600 seconds = 1 hour (auto-detected)
+    fireEvent.change(periodInput, { target: { value: '2' } }); // 2 hours = 7200 seconds
 
     // Submit the form
     const saveButton = screen.getByText('Save Changes');
@@ -559,8 +559,8 @@ describe('ChecksPage', () => {
     await waitFor(() => {
       expect(api.updateCheck).toHaveBeenCalledWith('team-123', 'check-1', {
         name: 'Updated Check Name',
-        periodSeconds: 7200, // 120 minutes * 60 seconds
-        graceSeconds: 300 // 5 minutes * 60 seconds (unchanged)
+        periodSeconds: 7200, // 2 hours * 3600 seconds
+        graceSeconds: 300 // 5 minutes unchanged
       });
     });
   });

@@ -349,17 +349,6 @@ async def record_ping_by_team_and_check_slug_fail(
     return await _record_ping_internal(check.token, db, PingType.FAIL, data)
 
 
-@router.get("/{team_slug}/{check_slug}", response_model=OkResponse)
-@router.post("/{team_slug}/{check_slug}", response_model=OkResponse)
-async def record_ping_by_team_and_check_slug(
-    team_slug: str,
-    check_slug: str,
-    db: Database,
-) -> OkResponse:
-    """Record a successful ping using team slug + check slug (shorthand, no action suffix).
-    Usage: /ping/my-team/backup-job
-    """
-    check = await db.get_check_by_team_slug_and_check_slug(team_slug, check_slug)
-    if not check:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Check not found")
-    return await _record_ping_internal(check.token, db, PingType.SUCCESS)
+# Note: /{team_slug}/{check_slug} shorthand is intentionally omitted — it would
+# be ambiguous with the existing /{token}/{code} error-code route. Always use
+# an explicit action suffix: /success or /fail.

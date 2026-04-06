@@ -4,13 +4,26 @@ import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook, 
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { config } from '../config'
 
-const CHANNEL_TYPES = {
+const ALL_CHANNEL_TYPES = {
   sns: { name: 'SNS Topic', icon: Bell, color: 'blue' },
   mattermost: { name: 'Mattermost', icon: MessageSquare, color: 'purple' },
   webhook: { name: 'Webhook', icon: Webhook, color: 'indigo' },
   telegram: { name: 'Telegram', icon: Send, color: 'sky' }
 }
+
+// Filter channel types based on cloud provider
+const getAvailableChannelTypes = () => {
+  const types = { ...ALL_CHANNEL_TYPES }
+  // Hide SNS for non-AWS deployments
+  if (config.cloudProvider !== 'aws') {
+    delete types.sns
+  }
+  return types
+}
+
+const CHANNEL_TYPES = getAvailableChannelTypes()
 
 export default function AlertChannelsPage({ user, onLogout }) {
   const { teamId } = useParams()
@@ -204,7 +217,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Alert Channels</h1>
               <p className="mt-1 text-sm text-gray-500">
-                Configure notification channels for alerts (SNS, Mattermost, Telegram)
+                Configure notification channels for alerts ({Object.values(CHANNEL_TYPES).map(t => t.name).join(', ')})
               </p>
             </div>
           </div>
@@ -256,10 +269,11 @@ export default function AlertChannelsPage({ user, onLogout }) {
                     onChange={(e) => setNewChannel(prev => ({ ...prev, type: e.target.value, configuration: {} }))}
                     className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   >
-                    <option value="sns">SNS Topic</option>
-                    <option value="mattermost">Mattermost</option>
-                    <option value="webhook">Webhook</option>
-                    <option value="telegram">Telegram</option>
+                    {Object.entries(CHANNEL_TYPES).map(([key, typeInfo]) => (
+                      <option key={key} value={key}>
+                        {typeInfo.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

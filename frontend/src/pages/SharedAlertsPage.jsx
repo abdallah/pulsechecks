@@ -4,6 +4,18 @@ import { ArrowLeft, Bell, Users, MessageSquare, Send, Plus, Settings, Trash2, We
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { config } from '../config'
+
+const ALL_CHANNEL_TYPES = [
+  { value: 'sns', label: 'SNS Topic' },
+  { value: 'mattermost', label: 'Mattermost' },
+  { value: 'webhook', label: 'Webhook' },
+  { value: 'telegram', label: 'Telegram' },
+]
+
+const CHANNEL_TYPES = ALL_CHANNEL_TYPES.filter(
+  t => t.value !== 'sns' || config.cloudProvider === 'aws'
+)
 
 export default function SharedAlertsPage({ user, onLogout }) {
   const navigate = useNavigate()
@@ -210,14 +222,13 @@ export default function SharedAlertsPage({ user, onLogout }) {
                     onChange={(e) => setNewChannel(prev => ({ ...prev, type: e.target.value, configuration: {} }))}
                     className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   >
-                    <option value="sns">SNS Topic</option>
-                    <option value="mattermost">Mattermost</option>
-                    <option value="webhook">Webhook</option>
-                    <option value="telegram">Telegram</option>
+                    {CHANNEL_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
                   </select>
                 </div>
 
-                {newChannel.type === 'mattermost' && (
+                {(newChannel.type === 'mattermost' || newChannel.type === 'webhook') && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
                     <input
@@ -227,24 +238,59 @@ export default function SharedAlertsPage({ user, onLogout }) {
                         ...prev,
                         configuration: { webhook_url: e.target.value }
                       }))}
-                      placeholder="https://chat.example.com/hooks/shared-alerts"
+                      placeholder={newChannel.type === 'mattermost'
+                        ? 'https://chat.example.com/hooks/shared-alerts'
+                        : 'https://hooks.example.com/shared-alerts'}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       required
                     />
                   </div>
                 )}
 
-                {newChannel.type === 'webhook' && (
+                {newChannel.type === 'telegram' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Bot Token</label>
+                      <input
+                        type="text"
+                        value={newChannel.configuration.bot_token || ''}
+                        onChange={(e) => setNewChannel(prev => ({
+                          ...prev,
+                          configuration: { ...prev.configuration, bot_token: e.target.value }
+                        }))}
+                        placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Chat ID</label>
+                      <input
+                        type="text"
+                        value={newChannel.configuration.chat_id || ''}
+                        onChange={(e) => setNewChannel(prev => ({
+                          ...prev,
+                          configuration: { ...prev.configuration, chat_id: e.target.value }
+                        }))}
+                        placeholder="-1001234567890"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {newChannel.type === 'sns' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
+                    <label className="block text-sm font-medium text-gray-700">SNS Topic ARN</label>
                     <input
-                      type="url"
-                      value={newChannel.configuration.webhook_url || ''}
+                      type="text"
+                      value={newChannel.configuration.topic_arn || ''}
                       onChange={(e) => setNewChannel(prev => ({
                         ...prev,
-                        configuration: { webhook_url: e.target.value }
+                        configuration: { topic_arn: e.target.value }
                       }))}
-                      placeholder="https://hooks.example.com/shared-alerts"
+                      placeholder="arn:aws:sns:us-east-1:123456789012:my-topic"
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       required
                     />
@@ -354,6 +400,37 @@ export default function SharedAlertsPage({ user, onLogout }) {
                         className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         required
                       />
+                    </div>
+                  )}
+
+                  {editingChannel.type === 'telegram' && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Bot Token</label>
+                        <input
+                          type="text"
+                          value={editingChannel.configuration?.bot_token || ''}
+                          onChange={(e) => setEditingChannel({
+                            ...editingChannel,
+                            configuration: { ...editingChannel.configuration, bot_token: e.target.value }
+                          })}
+                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Chat ID</label>
+                        <input
+                          type="text"
+                          value={editingChannel.configuration?.chat_id || ''}
+                          onChange={(e) => setEditingChannel({
+                            ...editingChannel,
+                            configuration: { ...editingChannel.configuration, chat_id: e.target.value }
+                          })}
+                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                          required
+                        />
+                      </div>
                     </div>
                   )}
 

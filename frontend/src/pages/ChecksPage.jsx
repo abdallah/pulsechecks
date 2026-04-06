@@ -42,6 +42,26 @@ export default function ChecksPage({ user, onLogout }) {
     graceSeconds: 300, // 5 minutes in seconds
   })
   const [quickEditLoading, setQuickEditLoading] = useState(false)
+  const [periodUnit, setPeriodUnit] = useState('minutes')
+  const [graceUnit, setGraceUnit] = useState('minutes')
+
+  // Helper to convert seconds to display value based on unit
+  const secondsToUnit = (seconds, unit) => {
+    switch (unit) {
+      case 'hours': return Math.round(seconds / 3600)
+      case 'days': return Math.round(seconds / 86400)
+      default: return Math.round(seconds / 60)
+    }
+  }
+
+  // Helper to convert display value back to seconds based on unit
+  const unitToSeconds = (value, unit) => {
+    switch (unit) {
+      case 'hours': return value * 3600
+      case 'days': return value * 86400
+      default: return value * 60
+    }
+  }
   
   useEffect(() => {
     loadTeam()
@@ -468,32 +488,54 @@ export default function ChecksPage({ user, onLogout }) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="period" className="block text-sm font-medium text-gray-700">
-                      Period (minutes)
+                      Period
                     </label>
-                    <input
-                      type="number"
-                      id="period"
-                      value={Math.round(formData.periodSeconds / 60)}
-                      onChange={(e) => setFormData({ ...formData, periodSeconds: parseInt(e.target.value) * 60 })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      min="1"
-                      required
-                    />
+                    <div className="mt-1 flex gap-2">
+                      <input
+                        type="number"
+                        id="period"
+                        value={secondsToUnit(formData.periodSeconds, periodUnit)}
+                        onChange={(e) => setFormData({ ...formData, periodSeconds: unitToSeconds(parseInt(e.target.value) || 1, periodUnit) })}
+                        className="block flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        min="1"
+                        required
+                      />
+                      <select
+                        value={periodUnit}
+                        onChange={(e) => setPeriodUnit(e.target.value)}
+                        className="block border border-gray-300 rounded-md shadow-sm py-2 px-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      >
+                        <option value="minutes">min</option>
+                        <option value="hours">hrs</option>
+                        <option value="days">days</option>
+                      </select>
+                    </div>
                     <p className="mt-1 text-xs text-gray-500">{formData.type === 'heartbeat' ? 'How often to ping' : 'How often to check'}</p>
                   </div>
                   <div>
                     <label htmlFor="grace" className="block text-sm font-medium text-gray-700">
-                      Grace (minutes)
+                      Grace Period
                     </label>
-                    <input
-                      type="number"
-                      id="grace"
-                      value={Math.round(formData.graceSeconds / 60)}
-                      onChange={(e) => setFormData({ ...formData, graceSeconds: parseInt(e.target.value) * 60 })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      min="0"
-                      required
-                    />
+                    <div className="mt-1 flex gap-2">
+                      <input
+                        type="number"
+                        id="grace"
+                        value={secondsToUnit(formData.graceSeconds, graceUnit)}
+                        onChange={(e) => setFormData({ ...formData, graceSeconds: unitToSeconds(parseInt(e.target.value) || 0, graceUnit) })}
+                        className="block flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        min="0"
+                        required
+                      />
+                      <select
+                        value={graceUnit}
+                        onChange={(e) => setGraceUnit(e.target.value)}
+                        className="block border border-gray-300 rounded-md shadow-sm py-2 px-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      >
+                        <option value="minutes">min</option>
+                        <option value="hours">hrs</option>
+                        <option value="days">days</option>
+                      </select>
+                    </div>
                     <p className="mt-1 text-xs text-gray-500">Extra time before alert</p>
                   </div>
                 </div>
@@ -907,32 +949,54 @@ export default function ChecksPage({ user, onLogout }) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="quickEditPeriod" className="block text-sm font-medium text-gray-700">
-                      Period (minutes)
+                      Period
                     </label>
-                    <input
-                      type="number"
-                      id="quickEditPeriod"
-                      value={Math.round(quickEditData.periodSeconds / 60)}
-                      onChange={(e) => setQuickEditData({ ...quickEditData, periodSeconds: parseInt(e.target.value) * 60 })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      min="1"
-                      required
-                    />
+                    <div className="mt-1 flex gap-2">
+                      <input
+                        type="number"
+                        id="quickEditPeriod"
+                        value={secondsToUnit(quickEditData.periodSeconds, periodUnit)}
+                        onChange={(e) => setQuickEditData({ ...quickEditData, periodSeconds: unitToSeconds(parseInt(e.target.value) || 1, periodUnit) })}
+                        className="block flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        min="1"
+                        required
+                      />
+                      <select
+                        value={periodUnit}
+                        onChange={(e) => setPeriodUnit(e.target.value)}
+                        className="block border border-gray-300 rounded-md shadow-sm py-2 px-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      >
+                        <option value="minutes">min</option>
+                        <option value="hours">hrs</option>
+                        <option value="days">days</option>
+                      </select>
+                    </div>
                   </div>
                   
                   <div>
                     <label htmlFor="quickEditGrace" className="block text-sm font-medium text-gray-700">
-                      Grace (minutes)
+                      Grace Period
                     </label>
-                    <input
-                      type="number"
-                      id="quickEditGrace"
-                      value={Math.round(quickEditData.graceSeconds / 60)}
-                      onChange={(e) => setQuickEditData({ ...quickEditData, graceSeconds: parseInt(e.target.value) * 60 })}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      min="0"
-                      required
-                    />
+                    <div className="mt-1 flex gap-2">
+                      <input
+                        type="number"
+                        id="quickEditGrace"
+                        value={secondsToUnit(quickEditData.graceSeconds, graceUnit)}
+                        onChange={(e) => setQuickEditData({ ...quickEditData, graceSeconds: unitToSeconds(parseInt(e.target.value) || 0, graceUnit) })}
+                        className="block flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        min="0"
+                        required
+                      />
+                      <select
+                        value={graceUnit}
+                        onChange={(e) => setGraceUnit(e.target.value)}
+                        className="block border border-gray-300 rounded-md shadow-sm py-2 px-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      >
+                        <option value="minutes">min</option>
+                        <option value="hours">hrs</option>
+                        <option value="days">days</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 

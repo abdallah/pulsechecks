@@ -130,8 +130,8 @@ describe('ChecksPage', () => {
     fireEvent.click(createButton);
 
     expect(screen.getByText('Check Name')).toBeInTheDocument();
-    expect(screen.getByText('Period (minutes)')).toBeInTheDocument();
-    expect(screen.getByText('Grace (minutes)')).toBeInTheDocument();
+    expect(screen.getByText('Period')).toBeInTheDocument();
+    expect(screen.getByText('Grace Period')).toBeInTheDocument();
   });
 
   test('renders page title', async () => {
@@ -171,10 +171,12 @@ describe('ChecksPage', () => {
     fireEvent.change(screen.getByLabelText('Check Name'), {
       target: { value: 'My New Check' }
     });
-    fireEvent.change(screen.getByLabelText('Period (minutes)'), {
+    // Period and Grace inputs are now in flex containers with unit selectors
+    const allInputs = screen.getAllByRole('spinbutton');
+    fireEvent.change(allInputs[0], {
       target: { value: '60' }
     });
-    fireEvent.change(screen.getByLabelText('Grace (minutes)'), {
+    fireEvent.change(allInputs[1], {
       target: { value: '5' }
     });
     
@@ -208,7 +210,8 @@ describe('ChecksPage', () => {
     fireEvent.change(screen.getByLabelText('Check Name'), {
       target: { value: 'My New Check' }
     });
-    fireEvent.change(screen.getByLabelText('Period (minutes)'), {
+    const allInputs = screen.getAllByRole('spinbutton');
+    fireEvent.change(allInputs[0], {
       target: { value: '60' }
     });
     

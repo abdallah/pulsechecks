@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from ..config import get_settings
 from ..models import (
     User, Team, TeamMember, Check, Ping, Role, CheckStatus,
-    PendingInvitation, AlertChannel, AlertChannelType
+    PendingInvitation, AlertChannel, AlertChannelType, MaintenanceWindow, Report
 )
 from ..errors import PulsechecksError
 from ..utils import get_iso_timestamp, get_current_time_seconds
@@ -581,7 +581,9 @@ class FirestoreClient(DatabaseInterface):
             'timestamp': ping.timestamp,
             'receivedAt': ping.received_at,
             'pingType': ping.ping_type,
+            'code': ping.code,
             'data': ping.data or '',
+            'responseTimeMs': ping.response_time_ms,
             'ttl': ttl_datetime,  # Firestore TTL uses datetime
         })
 
@@ -605,10 +607,168 @@ class FirestoreClient(DatabaseInterface):
                 timestamp=data['timestamp'],
                 received_at=data['receivedAt'],
                 ping_type=data.get('pingType', 'success'),
+                code=data.get('code'),
                 data=data.get('data'),
+                response_time_ms=data.get('responseTimeMs'),
             ))
 
         return pings
+
+    async def list_check_pings_between(
+        self,
+        check_id: str,
+        start_at: str,
+        end_at: str,
+        limit: int = 10000,
+    ) -> List[Ping]:
+        """List pings for a check inside an inclusive ISO timestamp range."""
+        pings_ref = (self.db.collection('checks').document(check_id)
+                     .collection('pings'))
+
+        query = (pings_ref
+                 .where('timestamp', '>=', start_at)
+                 .where('timestamp', '<=', end_at)
+                 .order_by('timestamp')
+                 .limit(limit))
+
+        pings = []
+        async for doc in query.stream():
+            data = doc.to_dict()
+            pings.append(Ping(
+                check_id=data['checkId'],
+                timestamp=data['timestamp'],
+                received_at=data['receivedAt'],
+                ping_type=data.get('pingType', 'success'),
+                code=data.get('code'),
+                data=data.get('data'),
+                response_time_ms=data.get('responseTimeMs'),
+            ))
+
+        return pings
+
+    async def create_maintenance_window(self, window: MaintenanceWindow) -> None:
+        """Create a maintenance window."""
+        doc_ref = (self.db.collection('teams').document(window.team_id)
+                   .collection('maintenance').document(window.window_id))
+        await doc_ref.set({
+            'windowId': window.window_id,
+            'teamId': window.team_id,
+            'checkId': window.check_id,
+            'startAt': window.start_at,
+            'endAt': window.end_at,
+            'label': window.label,
+            'createdBy': window.created_by,
+            'createdAt': window.created_at,
+        })
+
+    async def list_maintenance_windows(self, team_id: str, check_id: str | None = None) -> List[MaintenanceWindow]:
+        """List maintenance windows for a team."""
+        windows_ref = (self.db.collection('teams').document(team_id)
+                       .collection('maintenance'))
+
+        windows = []
+        async for doc in windows_ref.stream():
+            data = doc.to_dict()
+            if check_id and data.get('checkId') not in (None, check_id):
+                continue
+            windows.append(MaintenanceWindow(
+                window_id=data['windowId'],
+                team_id=data['teamId'],
+                check_id=data.get('checkId'),
+                start_at=data['startAt'],
+                end_at=data['endAt'],
+                label=data.get('label'),
+                created_by=data['createdBy'],
+                created_at=data['createdAt'],
+            ))
+
+        return sorted(windows, key=lambda window: (window.start_at, window.window_id))
+
+    async def delete_maintenance_window(self, team_id: str, window_id: str) -> None:
+        """Delete a maintenance window."""
+        doc_ref = (self.db.collection('teams').document(team_id)
+                   .collection('maintenance').document(window_id))
+        await doc_ref.delete()
+
+    async def create_report(self, report: Report) -> None:
+        """Persist a generated report record."""
+        doc_ref = (self.db.collection('teams').document(report.team_id)
+                   .collection('reports').document(report.report_id))
+        await doc_ref.set({
+            'reportId': report.report_id,
+            'teamId': report.team_id,
+            'checkId': report.check_id,
+            'reportType': report.report_type,
+            'format': report.format,
+            'from': report.from_date,
+            'to': report.to_date,
+            'status': report.status,
+            'downloadUrl': report.download_url,
+            'createdAt': report.created_at,
+            'createdBy': report.created_by,
+            'expiresAt': report.expires_at,
+            'fileName': report.file_name,
+            'contentType': report.content_type,
+            'content': report.content,
+        })
+
+    async def get_report(self, team_id: str, report_id: str) -> Optional[Report]:
+        """Get a report by ID."""
+        doc_ref = (self.db.collection('teams').document(team_id)
+                   .collection('reports').document(report_id))
+        doc = await doc_ref.get()
+        if not doc.exists:
+            return None
+        data = doc.to_dict()
+        return Report(
+            report_id=data['reportId'],
+            team_id=data['teamId'],
+            check_id=data.get('checkId'),
+            report_type=data['reportType'],
+            format=data['format'],
+            from_date=data['from'],
+            to_date=data['to'],
+            status=data['status'],
+            download_url=data.get('downloadUrl'),
+            created_at=data['createdAt'],
+            created_by=data['createdBy'],
+            expires_at=data['expiresAt'],
+            file_name=data.get('fileName'),
+            content_type=data.get('contentType'),
+            content=data.get('content'),
+        )
+
+    async def list_reports(self, team_id: str) -> List[Report]:
+        """List reports for a team."""
+        reports_ref = (self.db.collection('teams').document(team_id)
+                       .collection('reports'))
+        reports = []
+        async for doc in reports_ref.stream():
+            data = doc.to_dict()
+            reports.append(Report(
+                report_id=data['reportId'],
+                team_id=data['teamId'],
+                check_id=data.get('checkId'),
+                report_type=data['reportType'],
+                format=data['format'],
+                from_date=data['from'],
+                to_date=data['to'],
+                status=data['status'],
+                download_url=data.get('downloadUrl'),
+                created_at=data['createdAt'],
+                created_by=data['createdBy'],
+                expires_at=data['expiresAt'],
+                file_name=data.get('fileName'),
+                content_type=data.get('contentType'),
+                content=data.get('content'),
+            ))
+        return sorted(reports, key=lambda report: (report.created_at, report.report_id), reverse=True)
+
+    async def delete_report(self, team_id: str, report_id: str) -> None:
+        """Delete a report."""
+        doc_ref = (self.db.collection('teams').document(team_id)
+                   .collection('reports').document(report_id))
+        await doc_ref.delete()
 
     # Late detection
     async def query_due_checks(self, current_time_seconds: int, limit: int = 100) -> List[Check]:

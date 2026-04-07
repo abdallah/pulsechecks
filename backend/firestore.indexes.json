@@ -1,14 +1,25 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "teams",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "teamId", "order": "ASCENDING" }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": [
+    {
+      "collectionGroup": "pings",
+      "fieldPath": "ttl",
+      "ttl": true,
+      "indexes": [
+        {
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
+        },
+        {
+          "queryScope": "COLLECTION",
+          "order": "DESCENDING"
+        },
+        {
+          "queryScope": "COLLECTION",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
     {
       "collectionGroup": "members",
       "fieldPath": "userId",

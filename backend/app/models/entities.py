@@ -37,7 +37,7 @@ class TeamMember(BaseModel):
 
 class MattermostChannel(BaseModel):
     """Mattermost channel configuration entity."""
-    
+
     channel_id: str
     team_id: str
     name: str
@@ -50,7 +50,7 @@ class MattermostChannel(BaseModel):
 
 class AlertChannel(BaseModel):
     """Alert channel configuration entity."""
-    
+
     channel_id: str
     team_id: str
     name: str
@@ -81,24 +81,24 @@ class Check(BaseModel):
     last_alert_at: Optional[str] = None
     alert_channels: list[str] = []  # List of alert channel IDs
     mattermost_channels: list[str] = []  # List of Mattermost channel IDs (legacy)
-    
+
     # Check type (cron or http)
     type: CheckType = CheckType.CRON
     url: Optional[str] = None  # Target URL for http checks
     expected_status_code: int = 200
     expected_string: Optional[str] = None  # Expected string in response body
-    
+
     # Failure threshold for HTTP checks
     failure_threshold: int = 1  # Alert after N consecutive failures
     consecutive_failure_count: int = 0  # Current consecutive failure count
-    
+
     # Escalation configuration
     escalation_minutes: Optional[int] = None  # Minutes before escalating
     escalation_alert_channels: list[str] = []  # Alert channels for escalated alerts
     escalation_mattermost_channels: list[str] = []  # Mattermost channels for escalated alerts (legacy)
     escalation_triggered_at: Optional[str] = None  # When escalation was last triggered
-    
-    # Suppression configuration  
+
+    # Suppression configuration
     suppress_after_count: Optional[int] = None  # Suppress after N consecutive alerts
     suppress_duration_minutes: Optional[int] = None  # Suppress for N minutes
     consecutive_alert_count: int = 0  # Current consecutive alert count
@@ -114,6 +114,40 @@ class Ping(BaseModel):
     ping_type: str = "success"  # success, fail, or start
     code: Optional[str] = None  # Error code (max 50 chars, alphanumeric + underscore)
     data: Optional[str] = None
+    response_time_ms: Optional[int] = None
+
+
+class MaintenanceWindow(BaseModel):
+    """Scheduled maintenance window entity."""
+
+    window_id: str
+    team_id: str
+    check_id: Optional[str] = None
+    start_at: str
+    end_at: str
+    label: Optional[str] = None
+    created_by: str
+    created_at: str
+
+
+class Report(BaseModel):
+    """Generated report entity."""
+
+    report_id: str
+    team_id: str
+    check_id: Optional[str] = None
+    report_type: str
+    format: str
+    from_date: str
+    to_date: str
+    status: str
+    download_url: Optional[str] = None
+    created_at: str
+    created_by: str
+    expires_at: str
+    file_name: Optional[str] = None
+    content_type: Optional[str] = None
+    content: Optional[str] = None
 
 
 class PendingInvitation(BaseModel):

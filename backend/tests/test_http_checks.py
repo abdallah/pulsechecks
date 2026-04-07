@@ -25,7 +25,7 @@ def make_check(**kwargs):
         grace_seconds=60,
         status=CheckStatus.UP.value,
         created_at="2026-01-01T00:00:00Z",
-        check_type="http",
+        type="http",
         url="https://example.com",
         expected_status_code=200,
         expected_string=None,
@@ -57,12 +57,15 @@ class TestPollSingleCheck:
         mock_client.get.return_value = mock_resp
         mock_db = AsyncMock()
 
-        with patch("app.routers.ping._record_ping_internal", new_callable=AsyncMock) as mock_ping:
+        with patch("app.scheduler.time.monotonic", side_effect=[10.0, 10.123]), \
+             patch("app.routers.ping._record_ping_internal", new_callable=AsyncMock) as mock_ping:
             with patch("app.routers.ping._record_ping_internal", mock_ping):
                 await _poll_single_check(mock_client, mock_db, check)
                 mock_ping.assert_called_once()
                 ping_type, _ = get_ping_call_args(mock_ping)
                 assert ping_type == PingType.SUCCESS
+                assert 122 <= mock_ping.call_args.kwargs["response_time_ms"] <= 123
+                assert mock_ping.call_args.kwargs["code"] is None
 
     @pytest.mark.asyncio
     async def test_fail_ping_on_wrong_status_code(self):
@@ -75,13 +78,16 @@ class TestPollSingleCheck:
         mock_client.get.return_value = mock_resp
         mock_db = AsyncMock()
 
-        with patch("app.routers.ping._record_ping_internal", new_callable=AsyncMock) as mock_ping:
+        with patch("app.scheduler.time.monotonic", side_effect=[10.0, 10.25]), \
+             patch("app.routers.ping._record_ping_internal", new_callable=AsyncMock) as mock_ping:
             await _poll_single_check(mock_client, mock_db, check)
             mock_ping.assert_called_once()
             ping_type, data = get_ping_call_args(mock_ping)
             assert ping_type == PingType.FAIL
             assert "500" in str(data)
             assert "200" in str(data)
+            assert mock_ping.call_args.kwargs["code"] == "500"
+            assert mock_ping.call_args.kwargs["response_time_ms"] == 250
 
     @pytest.mark.asyncio
     async def test_fail_ping_on_missing_expected_string(self):

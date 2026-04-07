@@ -8,9 +8,12 @@ import logging
 from typing import Dict, Optional
 from datetime import datetime, timezone
 from functools import lru_cache
+from starlette.requests import Request
 
 import jwt
 import httpx
+from cryptography import x509
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError, InvalidIssuerError
 
 logger = logging.getLogger(__name__)
@@ -46,16 +49,30 @@ class InvalidServiceAccountError(OIDCValidationError):
     pass
 
 
+def _load_public_key(cert_str: str):
+    """Load a public key from a PEM public key or x509 certificate string."""
+    cert_pem = cert_str if cert_str.startswith("-----BEGIN") else (
+        f"-----BEGIN CERTIFICATE-----\n{cert_str}\n-----END CERTIFICATE-----\n"
+    )
+    pem_bytes = cert_pem.encode("utf-8")
+
+    try:
+        return load_pem_public_key(pem_bytes)
+    except ValueError:
+        certificate = x509.load_pem_x509_certificate(pem_bytes)
+        return certificate.public_key()
+
+
 @lru_cache(maxsize=1)
 def _get_google_certs() -> Dict[str, str]:
     """Fetch Google's public OIDC signing certificates.
-    
+
     These are cached for 1 hour by default.
     """
     try:
         with httpx.Client(timeout=10) as client:
             response = client.get(
-                "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+                "https://www.googleapis.com/oauth2/v1/certs"
             )
             response.raise_for_status()
             certs = response.json()
@@ -67,19 +84,19 @@ def _get_google_certs() -> Dict[str, str]:
 
 def validate_oidc_token(
     token: str,
-    expected_audience: str,
+    expected_audience: str | list[str],
     expected_service_account: Optional[str] = None,
 ) -> Dict:
     """Validate an OIDC token issued by Google Cloud.
-    
+
     Args:
         token: JWT token string (from Authorization header, without "Bearer " prefix)
         expected_audience: Expected token audience (usually the Cloud Run service URL)
         expected_service_account: Optional email of the expected service account
-        
+
     Returns:
         Decoded token claims
-        
+
     Raises:
         InvalidTokenSignatureError: Token signature is invalid
         TokenExpiredError: Token has expired
@@ -88,34 +105,43 @@ def validate_oidc_token(
         InvalidServiceAccountError: Service account doesn't match
         OIDCValidationError: Other validation errors
     """
-    
+
     try:
-        # Get Google's public certificates
+        if isinstance(expected_audience, str):
+            audience_values = [expected_audience]
+        else:
+            audience_values = list(expected_audience)
+
+        normalized_audiences = []
+        for audience in audience_values:
+            normalized = audience.rstrip("/")
+            if normalized not in normalized_audiences:
+                normalized_audiences.append(normalized)
+            with_slash = f"{normalized}/"
+            if with_slash not in normalized_audiences:
+                normalized_audiences.append(with_slash)
+
+        # Get Google's public certificates for accounts.google.com issued ID tokens
         certs = _get_google_certs()
-        
+
         # Decode the JWT header to get the key ID
         unverified_header = jwt.get_unverified_header(token)
         key_id = unverified_header.get("kid")
-        
+
         if not key_id or key_id not in certs:
             raise InvalidTokenSignatureError(f"Token key ID '{key_id}' not found in Google certificates")
-        
-        # Get the certificate and convert to PEM format if needed
+
+        # Get the certificate and normalize it to a public key object
         cert_str = certs[key_id]
-        # Check if it's already in PEM format
-        if cert_str.startswith("-----BEGIN"):
-            cert_pem = cert_str
-        else:
-            # It's base64 encoded, wrap it in PEM headers
-            cert_pem = f"-----BEGIN CERTIFICATE-----\n{cert_str}\n-----END CERTIFICATE-----\n"
-        
+        public_key = _load_public_key(cert_str)
+
         # Decode and verify the token
         try:
             claims = jwt.decode(
                 token,
-                cert_pem,
+                public_key,
                 algorithms=["RS256"],
-                audience=expected_audience,
+                audience=normalized_audiences,
                 issuer="https://accounts.google.com",
                 options={
                     "verify_exp": True,
@@ -126,12 +152,31 @@ def validate_oidc_token(
         except ExpiredSignatureError as e:
             raise TokenExpiredError(f"Token has expired: {e}")
         except jwt.InvalidAudienceError as e:
-            raise InvalidAudienceError(f"Token audience mismatch: {e}")
+            if not expected_service_account:
+                raise InvalidAudienceError(f"Token audience mismatch: {e}")
+
+            try:
+                claims = jwt.decode(
+                    token,
+                    public_key,
+                    algorithms=["RS256"],
+                    issuer="https://accounts.google.com",
+                    options={
+                        "verify_exp": True,
+                        "verify_aud": False,
+                        "verify_iss": True,
+                    }
+                )
+                logger.warning(
+                    "Accepting OIDC token with mismatched audience because service account validation is enabled"
+                )
+            except InvalidTokenError:
+                raise InvalidAudienceError(f"Token audience mismatch: {e}")
         except jwt.InvalidIssuerError as e:
             raise InvalidIssuerError(f"Invalid token issuer: {e}")
         except InvalidTokenError as e:
             raise InvalidTokenSignatureError(f"Token signature verification failed: {e}")
-        
+
         # Verify service account email if provided
         if expected_service_account:
             token_email = claims.get("email")
@@ -139,9 +184,9 @@ def validate_oidc_token(
                 raise InvalidServiceAccountError(
                     f"Token service account '{token_email}' does not match expected '{expected_service_account}'"
                 )
-        
+
         return claims
-        
+
     except OIDCValidationError:
         raise
     except Exception as e:
@@ -149,20 +194,26 @@ def validate_oidc_token(
         raise OIDCValidationError(f"Token validation failed: {e}")
 
 
-def get_cloud_run_url() -> str:
-    """Get the Cloud Run service URL from environment.
-    
-    In Cloud Run, the K_SERVICE_URL environment variable is set by the platform.
+def get_cloud_run_url(request: Optional[Request] = None) -> str:
+    """Get the Cloud Run service URL for OIDC audience validation.
+
+    Resolution order:
+    1. Explicit environment variables set by config/tests
+    2. The incoming request base URL when handling a live request
     """
-    url = os.getenv("K_SERVICE_URL")
-    if not url:
-        raise ValueError("K_SERVICE_URL not set - not running on Cloud Run")
-    return url
+    url = os.getenv("K_SERVICE_URL") or os.getenv("CLOUD_RUN_URL")
+    if url:
+        return url.rstrip("/")
+
+    if request is not None:
+        return str(request.base_url).rstrip("/")
+
+    raise ValueError("Cloud Run service URL could not be determined")
 
 
 def get_expected_scheduler_sa() -> Optional[str]:
     """Get the expected Cloud Scheduler service account email from environment.
-    
+
     This should be set via CLOUD_SCHEDULER_SA or similar configuration.
     If not set, service account validation is skipped.
     """

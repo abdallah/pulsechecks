@@ -65,13 +65,13 @@ class TestUserOperations:
         """Test user creation."""
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             await db_client.create_user(sample_user)
-            
+
             mock_table.put_item.assert_called_once()
             call_args = mock_table.put_item.call_args[1]
             item = call_args['Item']
-            
+
             assert item['PK'] == 'USER#user-123'
             assert item['SK'] == 'PROFILE'
             assert item['userId'] == 'user-123'
@@ -88,12 +88,12 @@ class TestUserOperations:
                 'createdAt': '2023-01-01T00:00:00Z'
             }
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             user = await db_client.get_user('user-123')
-            
+
             assert user is not None
             assert user.user_id == 'user-123'
             assert user.email == 'test@example.com'
@@ -102,12 +102,12 @@ class TestUserOperations:
     async def test_get_user_not_exists(self, db_client, mock_table):
         """Test getting non-existent user."""
         mock_table.get_item.return_value = {}
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             user = await db_client.get_user('nonexistent')
-            
+
             assert user is None
 
     @pytest.mark.asyncio
@@ -115,12 +115,12 @@ class TestUserOperations:
         """Test updating user login time."""
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             await db_client.update_user_login('user-123', 'Updated Name')
-            
+
             mock_table.update_item.assert_called_once()
             call_args = mock_table.update_item.call_args[1]
-            
+
             assert call_args['Key'] == {'PK': 'USER#user-123', 'SK': 'PROFILE'}
             assert ':name' in call_args['ExpressionAttributeValues']
 
@@ -133,13 +133,13 @@ class TestTeamOperations:
         """Test team creation."""
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             await db_client.create_team(sample_team)
-            
+
             mock_table.put_item.assert_called_once()
             call_args = mock_table.put_item.call_args[1]
             item = call_args['Item']
-            
+
             assert item['PK'] == 'TEAM#team-123'
             assert item['SK'] == 'METADATA'
             assert item['teamId'] == 'team-123'
@@ -155,12 +155,12 @@ class TestTeamOperations:
                 'createdBy': 'user-123'
             }
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             team = await db_client.get_team('team-123')
-            
+
             assert team is not None
             assert team.team_id == 'team-123'
             assert team.name == 'Test Team'
@@ -174,16 +174,16 @@ class TestTeamOperations:
             role=Role.ADMIN,
             joined_at='2023-01-01T00:00:00Z'
         )
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             await db_client.add_team_member(member)
-            
+
             mock_table.put_item.assert_called_once()
             call_args = mock_table.put_item.call_args[1]
             item = call_args['Item']
-            
+
             assert item['PK'] == 'TEAM#team-123'
             assert item['SK'] == 'MEMBER#user-123'
             assert item['role'] == 'admin'
@@ -201,12 +201,12 @@ class TestTeamOperations:
                 }
             ]
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             members = await db_client.list_team_members('team-123')
-            
+
             assert len(members) == 1
             assert members[0].user_id == 'user-123'
             assert members[0].role == Role.ADMIN
@@ -222,12 +222,12 @@ class TestTeamOperations:
                 'joinedAt': '2023-01-01T00:00:00Z'
             }
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             member = await db_client.get_team_member('team-123', 'user-123')
-            
+
             assert member is not None
             assert member.user_id == 'user-123'
             assert member.role == Role.ADMIN
@@ -245,7 +245,7 @@ class TestTeamOperations:
                 }
             ]
         }
-        
+
         # Mock the get_team call
         with patch.object(db_client, 'get_team') as mock_get_team:
             mock_get_team.return_value = Team(
@@ -254,12 +254,12 @@ class TestTeamOperations:
                 created_at='2023-01-01T00:00:00Z',
                 created_by='user-123'
             )
-            
+
             with patch.object(db_client, '_get_table') as mock_get_table:
                 mock_get_table.return_value.__aenter__.return_value = mock_table
-                
+
                 teams = await db_client.list_user_teams('user-123')
-                
+
                 assert len(teams) == 1
                 assert teams[0]['team'].team_id == 'team-123'
                 assert teams[0]['role'] == 'admin'
@@ -269,20 +269,20 @@ class TestTeamOperations:
         """Test updating team Mattermost webhook URL."""
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             # Test setting webhook URL
             await db_client.update_team_mattermost_webhook("team-123", "https://chat.example.com/hooks/abc123")
-            
+
             mock_table.update_item.assert_called_with(
                 Key={"PK": "TEAM#team-123", "SK": "METADATA"},
                 UpdateExpression="SET mattermostWebhookUrl = :url",
                 ExpressionAttributeValues={":url": "https://chat.example.com/hooks/abc123"},
             )
-            
+
             # Test removing webhook URL
             mock_table.reset_mock()
             await db_client.update_team_mattermost_webhook("team-123", None)
-            
+
             mock_table.update_item.assert_called_with(
                 Key={"PK": "TEAM#team-123", "SK": "METADATA"},
                 UpdateExpression="REMOVE mattermostWebhookUrl",
@@ -297,13 +297,13 @@ class TestCheckOperations:
         """Test check creation."""
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             await db_client.create_check(sample_check)
-            
+
             mock_table.put_item.assert_called_once()
             call_args = mock_table.put_item.call_args[1]
             item = call_args['Item']
-            
+
             assert item['PK'] == 'TEAM#team-123'
             assert item['SK'] == 'CHECK#check-123'
             assert item['token'] == 'token-123'
@@ -326,12 +326,12 @@ class TestCheckOperations:
                 }
             ]
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             check = await db_client.get_check_by_token('token-123')
-            
+
             assert check is not None
             assert check.check_id == 'check-123'
             assert check.token == 'token-123'
@@ -352,12 +352,12 @@ class TestCheckOperations:
                 'alertTopics': []
             }
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             check = await db_client.get_check('team-123', 'check-123')
-            
+
             assert check is not None
             assert check.check_id == 'check-123'
             assert check.team_id == 'team-123'
@@ -380,12 +380,12 @@ class TestCheckOperations:
                 }
             ]
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             checks = await db_client.list_team_checks('team-123')
-            
+
             assert len(checks) == 1
             assert checks[0].check_id == 'check-123'
 
@@ -405,13 +405,13 @@ class TestCheckOperations:
                 'alertTopics': []
             }
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             updates = {'name': 'Updated Check', 'periodSeconds': 7200}
             check = await db_client.update_check('team-123', 'check-123', updates)
-            
+
             assert check.name == 'Updated Check'
             assert check.period_seconds == 7200
 
@@ -420,16 +420,16 @@ class TestCheckOperations:
         """Test updating check on ping."""
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             updates = {
                 'lastPingAt': '2023-01-01T01:00:00Z',
                 'nextDueAt': '2023-01-01T02:00:00Z',
                 'alertAfterAt': '2023-01-01T02:05:00Z',
                 'status': 'up'
             }
-            
+
             result = await db_client.update_check_on_ping('team-123', 'check-123', updates)
-            
+
             mock_table.update_item.assert_called_once()
             # Since method returns bool, we expect True for successful update
             assert result is True
@@ -452,12 +452,12 @@ class TestCheckOperations:
                 }
             ]
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             checks = await db_client.query_due_checks(1672531200, limit=10)
-            
+
             assert len(checks) == 1
             assert checks[0].check_id == 'check-123'
 
@@ -472,20 +472,24 @@ class TestPingOperations:
             check_id='check-123',
             timestamp='1672531200000',
             received_at='2023-01-01T00:00:00Z',
-            ping_type='success'
+            ping_type='success',
+            code='timeout',
+            response_time_ms=321,
         )
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             await db_client.create_ping(ping)
-            
+
             mock_table.put_item.assert_called_once()
             call_args = mock_table.put_item.call_args[1]
             item = call_args['Item']
-            
+
             assert item['PK'] == 'CHECK#check-123'
             assert item['SK'] == 'PING#1672531200000'
+            assert item['code'] == 'timeout'
+            assert item['responseTimeMs'] == 321
 
     @pytest.mark.asyncio
     async def test_list_check_pings(self, db_client, mock_table):
@@ -496,18 +500,22 @@ class TestPingOperations:
                     'checkId': 'check-123',
                     'timestamp': '1672531200000',
                     'receivedAt': '2023-01-01T00:00:00Z',
-                    'pingType': 'success'
+                    'pingType': 'success',
+                    'code': 'timeout',
+                    'responseTimeMs': 321,
                 }
             ]
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             pings = await db_client.list_check_pings('check-123', limit=10)
-            
+
             assert len(pings) == 1
             assert pings[0].check_id == 'check-123'
+            assert pings[0].code == 'timeout'
+            assert pings[0].response_time_ms == 321
 
     @pytest.mark.asyncio
     async def test_list_check_pings_with_since_filter(self, db_client, mock_table):
@@ -523,17 +531,17 @@ class TestPingOperations:
                 }
             ]
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             since_timestamp = 1735020000000  # 2024-12-24 08:00:00
             pings = await db_client.list_check_pings('check-123', limit=50, since=since_timestamp)
-            
+
             assert len(pings) == 1
             assert pings[0].check_id == 'check-123'
             assert pings[0].data == 'Recent ping'
-            
+
             # Verify the query was called with time range
             mock_table.query.assert_called_once()
             call_args = mock_table.query.call_args
@@ -553,15 +561,15 @@ class TestPingOperations:
                 }
             ]
         }
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             pings = await db_client.list_check_pings('check-123', limit=10, since=None)
-            
+
             assert len(pings) == 1
             assert pings[0].check_id == 'check-123'
-            
+
             # Verify the query was called with begins_with pattern
             mock_table.query.assert_called_once()
             call_args = mock_table.query.call_args
@@ -578,10 +586,10 @@ class TestErrorHandling:
         mock_table.get_item.side_effect = ClientError(
             {'Error': {'Code': 'ResourceNotFoundException'}}, 'GetItem'
         )
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             with pytest.raises(ClientError):
                 await db_client.get_user('user-123')
 
@@ -591,28 +599,28 @@ class TestErrorHandling:
         mock_table.update_item.side_effect = ClientError(
             {'Error': {'Code': 'ConditionalCheckFailedException'}}, 'UpdateItem'
         )
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             result = await db_client.update_check_to_late(
                 'team-123', 'check-123', '2023-01-01T00:00:00Z'
             )
-            
+
             assert result is False
 
     @pytest.mark.asyncio
     async def test_update_check_to_late_success(self, db_client, mock_table):
         """Test successful update to late status."""
         mock_table.update_item.return_value = {}  # Successful update
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             result = await db_client.update_check_to_late(
                 'team-123', 'check-123', '2023-01-01T00:00:00Z'
             )
-            
+
             assert result is True
 
     @pytest.mark.asyncio
@@ -621,12 +629,12 @@ class TestErrorHandling:
         # Mock successful deletion and query
         mock_table.delete_item.return_value = {}
         mock_table.query.return_value = {"Items": []}  # No pings to delete
-        
+
         with patch.object(db_client, '_get_table') as mock_get_table:
             mock_get_table.return_value.__aenter__.return_value = mock_table
-            
+
             await db_client.delete_check('team-123', 'check-123')
-            
+
             # Should delete the check item
             mock_table.delete_item.assert_called_with(
                 Key={
@@ -634,7 +642,7 @@ class TestErrorHandling:
                     'SK': 'CHECK#check-123'
                 }
             )
-            
+
             # Should query for pings
             mock_table.query.assert_called_once()
 

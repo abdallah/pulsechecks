@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from contextlib import asynccontextmanager
 
 from ..config import get_settings
-from ..models import User, Team, TeamMember, Check, Ping, Role, CheckStatus, PendingInvitation, AlertChannel, AlertChannelType
+from ..models import User, Team, TeamMember, Check, Ping, Role, CheckStatus, PendingInvitation, AlertChannel, AlertChannelType, MaintenanceWindow, Report
 from ..errors import PulsechecksError
 from ..utils import get_iso_timestamp, get_current_time_seconds
 from ..utils.retry import with_retry, RetryConfig
@@ -398,7 +398,7 @@ class DynamoDBClient(DatabaseInterface):
             await table.delete_item(
                 Key={"PK": f"TEAM#{team_id}", "SK": f"CHECK#{check_id}"}
             )
-            
+
             # Delete all pings for this check
             # Query all pings first
             response = await table.query(
@@ -408,7 +408,7 @@ class DynamoDBClient(DatabaseInterface):
                     ":sk_prefix": "PING#",
                 },
             )
-            
+
             # Delete pings in batches
             items = response.get("Items", [])
             for item in items:
@@ -442,7 +442,9 @@ class DynamoDBClient(DatabaseInterface):
                     "timestamp": ping.timestamp,
                     "receivedAt": ping.received_at,
                     "pingType": ping.ping_type,
+                    "code": ping.code,
                     "data": ping.data or "",
+                    "responseTimeMs": ping.response_time_ms,
                     "TTL": ttl,
                 }
             )
@@ -480,10 +482,186 @@ class DynamoDBClient(DatabaseInterface):
                     timestamp=item["timestamp"],
                     received_at=item["receivedAt"],
                     ping_type=item.get("pingType", "success"),
+                    code=item.get("code"),
                     data=item.get("data"),
+                    response_time_ms=int(item["responseTimeMs"]) if item.get("responseTimeMs") is not None else None,
                 )
                 for item in items
             ]
+
+    async def list_check_pings_between(
+        self,
+        check_id: str,
+        start_at: str,
+        end_at: str,
+        limit: int = 10000,
+    ) -> List[Ping]:
+        """List pings for a check inside an inclusive ISO timestamp range."""
+        async with self._get_table() as table:
+            response = await table.query(
+                KeyConditionExpression="PK = :pk AND SK BETWEEN :start AND :end",
+                ExpressionAttributeValues={
+                    ":pk": f"CHECK#{check_id}",
+                    ":start": f"PING#{start_at}",
+                    ":end": f"PING#{end_at}",
+                },
+                ScanIndexForward=True,
+                Limit=limit,
+            )
+            items = response.get("Items", [])
+            return [
+                Ping(
+                    check_id=item["checkId"],
+                    timestamp=item["timestamp"],
+                    received_at=item["receivedAt"],
+                    ping_type=item.get("pingType", "success"),
+                    code=item.get("code"),
+                    data=item.get("data"),
+                    response_time_ms=int(item["responseTimeMs"]) if item.get("responseTimeMs") is not None else None,
+                )
+                for item in items
+            ]
+
+    async def create_maintenance_window(self, window: MaintenanceWindow) -> None:
+        """Create a maintenance window."""
+        async with self._get_table() as table:
+            await table.put_item(
+                Item={
+                    "PK": f"TEAM#{window.team_id}",
+                    "SK": f"MAINTENANCE#{window.window_id}",
+                    "windowId": window.window_id,
+                    "teamId": window.team_id,
+                    "checkId": window.check_id,
+                    "startAt": window.start_at,
+                    "endAt": window.end_at,
+                    "label": window.label,
+                    "createdBy": window.created_by,
+                    "createdAt": window.created_at,
+                }
+            )
+
+    async def list_maintenance_windows(self, team_id: str, check_id: str | None = None) -> List[MaintenanceWindow]:
+        """List maintenance windows for a team."""
+        async with self._get_table() as table:
+            response = await table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :sk_prefix)",
+                ExpressionAttributeValues={
+                    ":pk": f"TEAM#{team_id}",
+                    ":sk_prefix": "MAINTENANCE#",
+                },
+            )
+            items = response.get("Items", [])
+            windows = []
+            for item in items:
+                item_check_id = item.get("checkId")
+                if check_id and item_check_id not in (None, check_id):
+                    continue
+                windows.append(MaintenanceWindow(
+                    window_id=item["windowId"],
+                    team_id=item["teamId"],
+                    check_id=item_check_id,
+                    start_at=item["startAt"],
+                    end_at=item["endAt"],
+                    label=item.get("label"),
+                    created_by=item["createdBy"],
+                    created_at=item["createdAt"],
+                ))
+            return sorted(windows, key=lambda window: (window.start_at, window.window_id))
+
+    async def delete_maintenance_window(self, team_id: str, window_id: str) -> None:
+        """Delete a maintenance window."""
+        async with self._get_table() as table:
+            await table.delete_item(
+                Key={"PK": f"TEAM#{team_id}", "SK": f"MAINTENANCE#{window_id}"}
+            )
+
+    async def create_report(self, report: Report) -> None:
+        """Persist a generated report record."""
+        async with self._get_table() as table:
+            await table.put_item(
+                Item={
+                    "PK": f"TEAM#{report.team_id}",
+                    "SK": f"REPORT#{report.report_id}",
+                    "reportId": report.report_id,
+                    "teamId": report.team_id,
+                    "checkId": report.check_id,
+                    "reportType": report.report_type,
+                    "format": report.format,
+                    "from": report.from_date,
+                    "to": report.to_date,
+                    "status": report.status,
+                    "downloadUrl": report.download_url,
+                    "createdAt": report.created_at,
+                    "createdBy": report.created_by,
+                    "expiresAt": report.expires_at,
+                    "fileName": report.file_name,
+                    "contentType": report.content_type,
+                    "content": report.content,
+                }
+            )
+
+    async def get_report(self, team_id: str, report_id: str) -> Optional[Report]:
+        """Get a report by ID."""
+        async with self._get_table() as table:
+            response = await table.get_item(Key={"PK": f"TEAM#{team_id}", "SK": f"REPORT#{report_id}"})
+            item = response.get("Item")
+            if not item:
+                return None
+            return Report(
+                report_id=item["reportId"],
+                team_id=item["teamId"],
+                check_id=item.get("checkId"),
+                report_type=item["reportType"],
+                format=item["format"],
+                from_date=item["from"],
+                to_date=item["to"],
+                status=item["status"],
+                download_url=item.get("downloadUrl"),
+                created_at=item["createdAt"],
+                created_by=item["createdBy"],
+                expires_at=item["expiresAt"],
+                file_name=item.get("fileName"),
+                content_type=item.get("contentType"),
+                content=item.get("content"),
+            )
+
+    async def list_reports(self, team_id: str) -> List[Report]:
+        """List reports for a team."""
+        async with self._get_table() as table:
+            response = await table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :sk_prefix)",
+                ExpressionAttributeValues={
+                    ":pk": f"TEAM#{team_id}",
+                    ":sk_prefix": "REPORT#",
+                },
+            )
+            items = response.get("Items", [])
+            reports = [
+                Report(
+                    report_id=item["reportId"],
+                    team_id=item["teamId"],
+                    check_id=item.get("checkId"),
+                    report_type=item["reportType"],
+                    format=item["format"],
+                    from_date=item["from"],
+                    to_date=item["to"],
+                    status=item["status"],
+                    download_url=item.get("downloadUrl"),
+                    created_at=item["createdAt"],
+                    created_by=item["createdBy"],
+                    expires_at=item["expiresAt"],
+                    file_name=item.get("fileName"),
+                    content_type=item.get("contentType"),
+                    content=item.get("content"),
+                )
+                for item in items
+            ]
+            return sorted(reports, key=lambda report: (report.created_at, report.report_id), reverse=True)
+
+    async def delete_report(self, team_id: str, report_id: str) -> None:
+        """Delete a report."""
+        async with self._get_table() as table:
+            await table.delete_item(Key={"PK": f"TEAM#{team_id}", "SK": f"REPORT#{report_id}"})
 
     # Late detection
     async def query_due_checks(self, current_time_seconds: int, limit: int = 100) -> List[Check]:
@@ -500,7 +678,7 @@ class DynamoDBClient(DatabaseInterface):
             )
             items = response.get("Items", [])
             checks = [self._item_to_check(item) for item in items]
-            
+
             # Debug logging for checks that might be incorrectly marked as late
             for check in checks:
                 if check.last_ping_at:
@@ -508,7 +686,7 @@ class DynamoDBClient(DatabaseInterface):
                     last_ping_seconds = parse_iso_timestamp(check.last_ping_at)
                     time_since_ping = current_time_seconds - last_ping_seconds
                     logger.info(f"Check {check.check_id} due: last_ping={time_since_ping}s ago, period={check.period_seconds}s, grace={check.grace_seconds}s, alert_after={check.alert_after_at}")
-            
+
             return checks
 
     @staticmethod
@@ -579,11 +757,11 @@ class DynamoDBClient(DatabaseInterface):
                     ":email": email,
                 },
             )
-            
+
             items = response.get("Items", [])
             if not items:
                 return None
-                
+
             item = items[0]
             return User(
                 user_id=item["PK"].replace("USER#", ""),
@@ -632,7 +810,7 @@ class DynamoDBClient(DatabaseInterface):
                 KeyConditionExpression="PK = :pk",
                 ExpressionAttributeValues={":pk": f"INVITATION#{email}"},
             )
-            
+
             return [
                 PendingInvitation(
                     email=item["email"],
@@ -792,7 +970,7 @@ class DynamoDBClient(DatabaseInterface):
                     ":sk": "CHANNEL#",
                 },
             )
-            
+
             channels = []
             for item in response.get("Items", []):
                 channels.append(AlertChannel(
@@ -851,18 +1029,18 @@ class DynamoDBClient(DatabaseInterface):
                     KeyConditionExpression="PK = :pk",
                     ExpressionAttributeValues={":pk": f"TEAM#{team_id}"}
                 )
-                
+
                 items_to_delete = []
                 check_ids = []
-                
+
                 # Collect team items and extract check IDs
                 for item in response.get("Items", []):
                     items_to_delete.append({"PK": item["PK"], "SK": item["SK"]})
                     if item["SK"].startswith("CHECK#"):
                         check_ids.append(item["SK"].replace("CHECK#", ""))
-                
+
                 logger.info(f"Found {len(items_to_delete)} team items and {len(check_ids)} checks to delete")
-                
+
                 # Get all pings for each check
                 for check_id in check_ids:
                     try:
@@ -877,7 +1055,7 @@ class DynamoDBClient(DatabaseInterface):
                     except Exception as e:
                         logger.warning(f"Failed to get pings for check {check_id}: {e}")
                         continue
-                
+
                 # Get all invitations for this team
                 try:
                     invitation_response = await table.scan(
@@ -890,13 +1068,13 @@ class DynamoDBClient(DatabaseInterface):
                         items_to_delete.append({"PK": invitation["PK"], "SK": invitation["SK"]})
                 except Exception as e:
                     logger.warning(f"Failed to get invitations for team {team_id}: {e}")
-                
+
                 logger.info(f"Total items to delete: {len(items_to_delete)}")
-                
+
                 # Delete items individually for better error handling
                 deleted_count = 0
                 failed_count = 0
-                
+
                 for item in items_to_delete:
                     try:
                         await table.delete_item(Key=item)
@@ -905,12 +1083,12 @@ class DynamoDBClient(DatabaseInterface):
                         logger.error(f"Failed to delete item {item}: {e}")
                         failed_count += 1
                         continue
-                
+
                 logger.info(f"Team deletion completed: {deleted_count} deleted, {failed_count} failed")
-                
+
                 if failed_count > 0:
                     raise PulsechecksError(f"Team deletion partially failed: {failed_count} items could not be deleted")
-                        
+
         except Exception as e:
             logger.error(f"Failed to delete team {team_id}: {e}")
             raise PulsechecksError(f"Failed to delete team: {str(e)}")

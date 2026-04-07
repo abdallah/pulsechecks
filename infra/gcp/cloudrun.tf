@@ -57,6 +57,11 @@ resource "google_cloud_run_service" "pulsechecks_api" {
         }
 
         env {
+          name  = "CLOUD_SCHEDULER_SA"
+          value = google_service_account.cloudrun_sa.email
+        }
+
+        env {
           name  = "FRONTEND_URL"
           value = "https://${var.domain_name}"
         }

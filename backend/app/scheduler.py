@@ -1,5 +1,6 @@
 """HTTP endpoint poller - background task that checks HTTP endpoints."""
 import asyncio
+import time
 import httpx
 from .db.factory import create_db_client
 from .models.enums import CheckStatus, PingType
@@ -48,27 +49,46 @@ async def poll_http_checks():
 async def _poll_single_check(client, db, check):
     """Poll a single HTTP check and record the result."""
     error_detail = None
+    error_code = None
+    response_time_ms = None
     success = False
+    start_time = time.monotonic()
 
     try:
         resp = await client.get(check.url)
+        response_time_ms = int((time.monotonic() - start_time) * 1000)
         if resp.status_code != check.expected_status_code:
             error_detail = f"Got {resp.status_code}, expected {check.expected_status_code}"
+            error_code = str(resp.status_code)
         elif check.expected_string and check.expected_string not in resp.text:
             error_detail = f"Response body missing expected string: '{check.expected_string}'"
+            error_code = "unexpected_response"
         else:
             success = True
     except httpx.TimeoutException:
         error_detail = f"Connection timeout after {HTTP_TIMEOUT}s"
+        error_code = "timeout"
     except httpx.ConnectError as e:
         error_detail = f"Connection error: {str(e)}"
+        error_code = "connection_error"
     except Exception as e:
         error_detail = f"Error: {str(e)}"
+        error_code = "error"
+
+    if response_time_ms is None:
+        response_time_ms = int((time.monotonic() - start_time) * 1000)
 
     from .routers.ping import _record_ping_internal
     ping_type = PingType.SUCCESS if success else PingType.FAIL
     try:
-        await _record_ping_internal(check.token, db, ping_type=ping_type, data=error_detail)
+        await _record_ping_internal(
+            check.token,
+            db,
+            ping_type=ping_type,
+            data=error_detail,
+            code=error_code,
+            response_time_ms=response_time_ms,
+        )
         if error_detail:
             logger.warning(f"HTTP check failed for {check.check_id} ({check.url}): {error_detail}")
         else:

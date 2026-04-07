@@ -23,12 +23,51 @@ function slugPingUrl(baseUrl, teamSlug, checkSlug) {
   return `${baseUrl}/ping/${teamSlug}/${checkSlug}`
 }
 
+function toDateTimeLocalValue(date) {
+  const offsetMilliseconds = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offsetMilliseconds).toISOString().slice(0, 16)
+}
+
+function createDefaultUptimeRange() {
+  const now = new Date()
+  const dayAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
+  return {
+    startAt: toDateTimeLocalValue(dayAgo),
+    endAt: toDateTimeLocalValue(now),
+  }
+}
+
+function createDefaultMaintenanceForm() {
+  const startAt = new Date()
+  const endAt = new Date(startAt.getTime() + (60 * 60 * 1000))
+  return {
+    scope: 'check',
+    startAt: toDateTimeLocalValue(startAt),
+    endAt: toDateTimeLocalValue(endAt),
+    label: '',
+  }
+}
+
 export default function CheckDetailPage({ user, onLogout }) {
   const { teamId, checkId } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
   const [check, setCheck] = useState(null)
   const [pings, setPings] = useState([])
+  const [stats, setStats] = useState(null)
+  const [statsRange, setStatsRange] = useState('24h')
+  const [statsLoading, setStatsLoading] = useState(false)
+  const [errorSummary, setErrorSummary] = useState(null)
+  const [errorRange, setErrorRange] = useState('24h')
+  const [errorsLoading, setErrorsLoading] = useState(false)
+  const [uptimeReport, setUptimeReport] = useState(null)
+  const [uptimeLoading, setUptimeLoading] = useState(false)
+  const [uptimeRange, setUptimeRange] = useState(() => createDefaultUptimeRange())
+  const [excludeMaintenance, setExcludeMaintenance] = useState(true)
+  const [maintenanceWindows, setMaintenanceWindows] = useState([])
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false)
+  const [maintenanceSaving, setMaintenanceSaving] = useState(false)
+  const [maintenanceForm, setMaintenanceForm] = useState(() => createDefaultMaintenanceForm())
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [selectedPing, setSelectedPing] = useState(null)
@@ -58,6 +97,32 @@ export default function CheckDetailPage({ user, onLogout }) {
     return () => clearInterval(interval)
   }, [teamId, checkId])
 
+  useEffect(() => {
+    if (check?.type === 'http') {
+      loadCheckStats(statsRange)
+    } else {
+      setStats(null)
+    }
+  }, [teamId, checkId, check?.type, statsRange])
+
+  useEffect(() => {
+    if (check) {
+      loadCheckErrorSummary(errorRange)
+    } else {
+      setErrorSummary(null)
+    }
+  }, [teamId, checkId, check?.checkId, errorRange])
+
+  useEffect(() => {
+    if (check) {
+      loadCheckUptime(uptimeRange.startAt, uptimeRange.endAt, excludeMaintenance)
+      loadMaintenanceWindows()
+    } else {
+      setUptimeReport(null)
+      setMaintenanceWindows([])
+    }
+  }, [teamId, checkId, check?.checkId])
+
   async function loadCheckData() {
     try {
       const [checkData, pingsData, teamData] = await Promise.all([
@@ -80,6 +145,104 @@ export default function CheckDetailPage({ user, onLogout }) {
     }
   }
 
+  async function loadCheckStats(range) {
+    setStatsLoading(true)
+    try {
+      const statsData = await api.getCheckStats(teamId, checkId, range)
+      setStats(statsData)
+    } catch (error) {
+      console.error('Failed to load check stats:', error)
+      setStats(null)
+    } finally {
+      setStatsLoading(false)
+    }
+  }
+
+  async function loadCheckErrorSummary(range) {
+    setErrorsLoading(true)
+    try {
+      const errorData = await api.getCheckErrorSummary(teamId, checkId, range)
+      setErrorSummary(errorData)
+    } catch (error) {
+      console.error('Failed to load check error summary:', error)
+      setErrorSummary(null)
+    } finally {
+      setErrorsLoading(false)
+    }
+  }
+
+  async function loadCheckUptime(startAt, endAt, exclude) {
+    setUptimeLoading(true)
+    try {
+      const uptimeData = await api.getCheckUptime(
+        teamId,
+        checkId,
+        new Date(startAt).toISOString(),
+        new Date(endAt).toISOString(),
+        exclude,
+      )
+      setUptimeReport(uptimeData)
+    } catch (error) {
+      console.error('Failed to load uptime report:', error)
+      setUptimeReport(null)
+    } finally {
+      setUptimeLoading(false)
+    }
+  }
+
+  async function loadMaintenanceWindows() {
+    setMaintenanceLoading(true)
+    try {
+      const windows = await api.listMaintenanceWindows(teamId, checkId)
+      setMaintenanceWindows(Array.isArray(windows) ? windows : [])
+    } catch (error) {
+      console.error('Failed to load maintenance windows:', error)
+      setMaintenanceWindows([])
+    } finally {
+      setMaintenanceLoading(false)
+    }
+  }
+
+  async function handleApplyUptimeReport() {
+    await loadCheckUptime(uptimeRange.startAt, uptimeRange.endAt, excludeMaintenance)
+  }
+
+  async function handleCreateMaintenanceWindow(event) {
+    event.preventDefault()
+    setMaintenanceSaving(true)
+    try {
+      await api.createMaintenanceWindow(teamId, {
+        checkId: maintenanceForm.scope === 'team' ? undefined : checkId,
+        startAt: new Date(maintenanceForm.startAt).toISOString(),
+        endAt: new Date(maintenanceForm.endAt).toISOString(),
+        label: maintenanceForm.label || undefined,
+      })
+      setMaintenanceForm(createDefaultMaintenanceForm())
+      await Promise.all([
+        loadMaintenanceWindows(),
+        loadCheckUptime(uptimeRange.startAt, uptimeRange.endAt, excludeMaintenance),
+      ])
+      toast.success('Maintenance window saved')
+    } catch (error) {
+      toast.error('Failed to save maintenance window: ' + error.message)
+    } finally {
+      setMaintenanceSaving(false)
+    }
+  }
+
+  async function handleDeleteMaintenanceWindow(windowId) {
+    try {
+      await api.deleteMaintenanceWindow(teamId, windowId)
+      await Promise.all([
+        loadMaintenanceWindows(),
+        loadCheckUptime(uptimeRange.startAt, uptimeRange.endAt, excludeMaintenance),
+      ])
+      toast.success('Maintenance window deleted')
+    } catch (error) {
+      toast.error('Failed to delete maintenance window: ' + error.message)
+    }
+  }
+
   async function loadAlertTopics() {
     try {
       const channels = await api.listAlertChannels(teamId)
@@ -93,19 +256,19 @@ export default function CheckDetailPage({ user, onLogout }) {
     try {
       // Load team-specific channels
       const teamChannels = await api.listAlertChannels(teamId)
-      
+
       // Load shared channels from all teams
       const teamsData = await api.listTeams()
       const teams = Array.isArray(teamsData) ? teamsData : teamsData.teams || []
-      
+
       const sharedChannels = []
       const seenChannels = new Set()
-      
+
       for (const team of teams) {
         try {
           const channels = await api.listAlertChannels(team.teamId)
           const teamSharedChannels = channels.filter(channel => channel.shared)
-          
+
           for (const channel of teamSharedChannels) {
             const channelKey = `${channel.teamId}-${channel.channelId}`
             if (!seenChannels.has(channelKey)) {
@@ -121,13 +284,13 @@ export default function CheckDetailPage({ user, onLogout }) {
           console.error(`Failed to load channels for team ${team.teamId}:`, error)
         }
       }
-      
+
       // Combine team channels and shared channels
       const allChannels = [
         ...(Array.isArray(teamChannels) ? teamChannels : []),
         ...sharedChannels
       ]
-      
+
       setAvailableChannels(allChannels)
     } catch (error) {
       console.error('Failed to load alert channels:', error)
@@ -285,6 +448,25 @@ export default function CheckDetailPage({ user, onLogout }) {
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`
     return `${Math.floor(seconds / 86400)}d`
+  }
+
+  function formatResponseTime(value) {
+    return value == null ? 'N/A' : `${value} ms`
+  }
+
+  function formatFailureCode(value) {
+    return value || 'unknown'
+  }
+
+  function formatIncidentDuration(value) {
+    if (value == null) return 'N/A'
+    if (value < 60) return `${value}s`
+    if (value < 3600) return `${Math.round(value / 60)}m`
+    return `${(value / 3600).toFixed(1)}h`
+  }
+
+  function formatMinutes(value) {
+    return value == null ? '0 min' : `${value} min`
   }
 
   if (loading) {
@@ -543,6 +725,389 @@ export default function CheckDetailPage({ user, onLogout }) {
             {check.graceSeconds > 2 * check.periodSeconds && (
               <div className="mt-4 bg-amber-50 border border-amber-300 rounded-md p-3 text-sm text-amber-800">
                 ⚠️ Grace period is longer than 2× the check period — you may miss alerts
+              </div>
+            )}
+          </div>
+        </div>
+
+        {check.type === 'http' && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg leading-6 font-medium text-gray-900">Performance History</h3>
+                <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                  Response time and availability statistics for recent HTTP polls
+                </p>
+              </div>
+              <select
+                aria-label="Stats range"
+                value={statsRange}
+                onChange={(event) => setStatsRange(event.target.value)}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+              >
+                <option value="24h">Last 24 hours</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </div>
+            <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+              {statsLoading ? (
+                <div className="text-sm text-gray-500">Loading performance statistics...</div>
+              ) : !stats ? (
+                <div className="text-sm text-gray-500">Performance statistics are not available yet.</div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Uptime</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{stats.uptimePct}%</div>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Average</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{formatResponseTime(stats.avgResponseMs)}</div>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">P95</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{formatResponseTime(stats.p95ResponseMs)}</div>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Latest</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{formatResponseTime(stats.latestResponseMs)}</div>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Failures</div>
+                      <div className="mt-2 text-2xl font-semibold text-gray-900">{stats.failCount}</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700">Recent response samples</h4>
+                    {stats.responseTimeSeries.length === 0 ? (
+                      <div className="mt-2 text-sm text-gray-500">No response-time data recorded for this window.</div>
+                    ) : (
+                      <div className="mt-3 overflow-hidden rounded-md border border-gray-200">
+                        <ul className="divide-y divide-gray-200">
+                          {stats.responseTimeSeries.slice(-10).reverse().map((point) => (
+                            <li key={`${point.timestamp}-${point.responseTimeMs}`} className="flex items-center justify-between px-4 py-3 text-sm">
+                              <div>
+                                <div className="font-medium text-gray-900">{point.responseTimeMs} ms</div>
+                                <div className="text-xs text-gray-500">{formatDistanceToNow(new Date(point.timestamp), { addSuffix: true })}</div>
+                              </div>
+                              <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                                point.pingType === 'fail' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                              }`}>
+                                {point.pingType}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-5 sm:px-6 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Error Analysis</h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                Failure trends, dominant error reasons, and the latest failure log for this check
+              </p>
+            </div>
+            <select
+              aria-label="Error range"
+              value={errorRange}
+              onChange={(event) => setErrorRange(event.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+            >
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+            </select>
+          </div>
+          <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+            {errorsLoading ? (
+              <div className="text-sm text-gray-500">Loading error summary...</div>
+            ) : !errorSummary ? (
+              <div className="text-sm text-gray-500">Error summary is not available yet.</div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Failures</div>
+                    <div className="mt-2 text-2xl font-semibold text-gray-900">{errorSummary.totalFailures}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Most Common Code</div>
+                    <div className="mt-2 text-2xl font-semibold text-gray-900">{formatFailureCode(errorSummary.mostCommonCode)}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Last Failure</div>
+                    <div className="mt-2 text-sm font-semibold text-gray-900">
+                      {errorSummary.lastFailureAt ? formatDistanceToNow(new Date(errorSummary.lastFailureAt), { addSuffix: true }) : 'No failures'}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Longest Incident</div>
+                    <div className="mt-2 text-sm font-semibold text-gray-900">
+                      {errorSummary.longestIncident ? formatIncidentDuration(errorSummary.longestIncident.durationSeconds) : 'No incidents'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700">Failure codes</h4>
+                    {errorSummary.failureCodes.length === 0 ? (
+                      <div className="mt-2 text-sm text-gray-500">No failures recorded for this window.</div>
+                    ) : (
+                      <div className="mt-3 overflow-hidden rounded-md border border-gray-200">
+                        <ul className="divide-y divide-gray-200">
+                          {errorSummary.failureCodes.map((entry) => (
+                            <li key={entry.code} className="flex items-center justify-between px-4 py-3 text-sm">
+                              <div className="font-medium text-gray-900">{formatFailureCode(entry.code)}</div>
+                              <div className="text-gray-500">{entry.count} event{entry.count === 1 ? '' : 's'}</div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700">Recent failures</h4>
+                    {errorSummary.recentFailures.length === 0 ? (
+                      <div className="mt-2 text-sm text-gray-500">No recent failures recorded.</div>
+                    ) : (
+                      <div className="mt-3 overflow-hidden rounded-md border border-gray-200">
+                        <ul className="divide-y divide-gray-200">
+                          {errorSummary.recentFailures.map((ping) => (
+                            <li key={`${ping.timestamp}-${ping.code || 'failure'}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                              <div>
+                                <div className="font-medium text-gray-900">{formatFailureCode(ping.code)}</div>
+                                <div className="text-xs text-gray-500">{formatDistanceToNow(new Date(ping.receivedAt), { addSuffix: true })}</div>
+                                {ping.data && (
+                                  <div className="mt-1 text-xs text-gray-600 line-clamp-2">{ping.data}</div>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-medium text-gray-900">{formatResponseTime(ping.responseTimeMs)}</div>
+                                <button
+                                  onClick={() => setSelectedPing(ping)}
+                                  className="mt-1 text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                  View payload
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-5 sm:px-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Uptime Report</h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                Calculate uptime across a custom window and exclude scheduled maintenance from the result.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="text-sm text-gray-600">
+                <span className="mb-1 block font-medium text-gray-700">From</span>
+                <input
+                  type="datetime-local"
+                  value={uptimeRange.startAt}
+                  onChange={(event) => setUptimeRange((current) => ({ ...current, startAt: event.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                />
+              </label>
+              <label className="text-sm text-gray-600">
+                <span className="mb-1 block font-medium text-gray-700">To</span>
+                <input
+                  type="datetime-local"
+                  value={uptimeRange.endAt}
+                  onChange={(event) => setUptimeRange((current) => ({ ...current, endAt: event.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                />
+              </label>
+              <label className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700 lg:mt-6">
+                <input
+                  type="checkbox"
+                  checked={excludeMaintenance}
+                  onChange={(event) => setExcludeMaintenance(event.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Exclude maintenance
+              </label>
+              <button
+                onClick={handleApplyUptimeReport}
+                disabled={uptimeLoading}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 lg:mt-6"
+              >
+                {uptimeLoading ? 'Running...' : 'Run report'}
+              </button>
+            </div>
+          </div>
+          <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+            {uptimeLoading ? (
+              <div className="text-sm text-gray-500">Calculating uptime...</div>
+            ) : !uptimeReport ? (
+              <div className="text-sm text-gray-500">Uptime reporting is not available yet for this window.</div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Uptime</div>
+                    <div className="mt-2 text-2xl font-semibold text-gray-900">{uptimeReport.uptimePct}%</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Observed Minutes</div>
+                    <div className="mt-2 text-2xl font-semibold text-gray-900">{formatMinutes(uptimeReport.totalObservedMinutes)}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Downtime</div>
+                    <div className="mt-2 text-2xl font-semibold text-gray-900">{formatMinutes(uptimeReport.downtimeMinutes)}</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Excluded Maintenance</div>
+                    <div className="mt-2 text-2xl font-semibold text-gray-900">{formatMinutes(uptimeReport.excludedMaintenanceMinutes)}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700">Incident Timeline</h4>
+                    {uptimeReport.incidents.length === 0 ? (
+                      <div className="mt-2 text-sm text-gray-500">No downtime incidents were recorded for this window.</div>
+                    ) : (
+                      <div className="mt-3 overflow-hidden rounded-md border border-gray-200">
+                        <ul className="divide-y divide-gray-200">
+                          {uptimeReport.incidents.map((incident) => (
+                            <li key={`${incident.startedAt}-${incident.endedAt}`} className="px-4 py-3 text-sm">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="font-medium text-gray-900">{formatFailureCode(incident.dominantCode)}</div>
+                                  <div className="text-xs text-gray-500">
+                                    {new Date(incident.startedAt).toLocaleString()} to {new Date(incident.endedAt).toLocaleString()}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-medium text-gray-900">{formatIncidentDuration(incident.durationSeconds)}</div>
+                                  <div className="text-xs text-gray-500">{incident.failureCount} failure sample{incident.failureCount === 1 ? '' : 's'}</div>
+                                </div>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-4">
+                      <h4 className="text-sm font-medium text-gray-700">Maintenance Windows</h4>
+                      {maintenanceLoading && <span className="text-xs text-gray-500">Refreshing...</span>}
+                    </div>
+                    <form onSubmit={handleCreateMaintenanceWindow} className="mt-3 grid gap-3 rounded-md border border-gray-200 p-4 sm:grid-cols-2">
+                      <label className="text-sm text-gray-600 sm:col-span-2">
+                        <span className="mb-1 block font-medium text-gray-700">Applies To</span>
+                        <select
+                          value={maintenanceForm.scope}
+                          onChange={(event) => setMaintenanceForm((current) => ({ ...current, scope: event.target.value }))}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                        >
+                          <option value="check">This check only</option>
+                          <option value="team">Entire team</option>
+                        </select>
+                      </label>
+                      <label className="text-sm text-gray-600">
+                        <span className="mb-1 block font-medium text-gray-700">Start</span>
+                        <input
+                          type="datetime-local"
+                          value={maintenanceForm.startAt}
+                          onChange={(event) => setMaintenanceForm((current) => ({ ...current, startAt: event.target.value }))}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                          required
+                        />
+                      </label>
+                      <label className="text-sm text-gray-600">
+                        <span className="mb-1 block font-medium text-gray-700">End</span>
+                        <input
+                          type="datetime-local"
+                          value={maintenanceForm.endAt}
+                          onChange={(event) => setMaintenanceForm((current) => ({ ...current, endAt: event.target.value }))}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                          required
+                        />
+                      </label>
+                      <label className="text-sm text-gray-600 sm:col-span-2">
+                        <span className="mb-1 block font-medium text-gray-700">Label</span>
+                        <input
+                          type="text"
+                          value={maintenanceForm.label}
+                          onChange={(event) => setMaintenanceForm((current) => ({ ...current, label: event.target.value }))}
+                          placeholder="Deploy, migration, vendor maintenance..."
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                        />
+                      </label>
+                      <div className="sm:col-span-2">
+                        <button
+                          type="submit"
+                          disabled={maintenanceSaving}
+                          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                        >
+                          {maintenanceSaving ? 'Saving...' : 'Add maintenance window'}
+                        </button>
+                        <div className="mt-2 text-xs text-gray-500">
+                          {maintenanceForm.scope === 'team'
+                            ? 'This window will be excluded from uptime reports across the whole team.'
+                            : 'This window will only be excluded for the current check.'}
+                        </div>
+                      </div>
+                    </form>
+
+                    {maintenanceWindows.length === 0 ? (
+                      <div className="mt-3 text-sm text-gray-500">No maintenance windows scheduled for this check.</div>
+                    ) : (
+                      <div className="mt-3 overflow-hidden rounded-md border border-gray-200">
+                        <ul className="divide-y divide-gray-200">
+                          {maintenanceWindows.map((window) => (
+                            <li key={window.windowId} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+                              <div>
+                                <div className="font-medium text-gray-900">{window.label || 'Scheduled maintenance'}</div>
+                                <div className="text-xs text-gray-500">
+                                  {new Date(window.startAt).toLocaleString()} to {new Date(window.endAt).toLocaleString()}
+                                </div>
+                                <div className="mt-1 text-xs text-gray-500">
+                                  {window.checkId ? 'Scope: this check' : 'Scope: entire team'}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMaintenanceWindow(window.windowId)}
+                                className="text-xs font-medium text-red-600 hover:text-red-800"
+                              >
+                                Delete
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>

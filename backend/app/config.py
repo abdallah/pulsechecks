@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     debug: bool = False
     frontend_url: str = "https://pulsechecks.example.com"
 
+    # PostHog
+    posthog_api_key: str = ""
+    posthog_host: str = "https://us.i.posthog.com"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -25,20 +25,20 @@ router = APIRouter(prefix="/internal", tags=["internal"])
 
 async def _verify_oidc(request: Request):
     """Verify Cloud Scheduler OIDC token.
-    
+
     Validates:
     - Token signature (using Google's public certificates)
     - Token expiry
     - Token audience (must match Cloud Run service URL)
     - Service account email (if CLOUD_SCHEDULER_SA is configured)
-    
+
     Raises HTTPException with appropriate 401/403 status codes.
     """
     # Skip OIDC validation in debug mode (local development)
     if os.getenv("DEBUG", "").lower() in ("1", "true"):
         logger.info("Skipping OIDC validation in debug mode")
         return
-    
+
     # Extract Bearer token from Authorization header
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -47,32 +47,33 @@ async def _verify_oidc(request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid Authorization header. Expected 'Bearer <token>'"
         )
-    
+
     token = auth_header[7:]  # Remove "Bearer " prefix
-    
+
     try:
         # Get expected audience (Cloud Run service URL)
         try:
-            expected_audience = get_cloud_run_url()
+            service_url = get_cloud_run_url(request)
+            expected_audience = [service_url, str(request.url).rstrip("/")]
         except ValueError as e:
             logger.error(f"Cannot determine Cloud Run URL: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Server configuration error"
             )
-        
+
         # Get expected service account (optional)
         expected_service_account = get_expected_scheduler_sa()
-        
+
         # Validate the OIDC token
         claims = validate_oidc_token(
             token,
             expected_audience=expected_audience,
             expected_service_account=expected_service_account,
         )
-        
+
         logger.info(f"OIDC token validated successfully for service account: {claims.get('email')}")
-        
+
     except InvalidTokenSignatureError as e:
         logger.warning(f"Invalid token signature: {e}")
         raise HTTPException(

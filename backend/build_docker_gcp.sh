@@ -115,8 +115,12 @@ echo ""
 if [ "$TAG" != "latest" ]; then
     LATEST_IMAGE="gcr.io/${PROJECT_ID}/${IMAGE_NAME}:latest"
     print_info "Tagging as latest: $LATEST_IMAGE"
-    docker tag "$FULL_IMAGE" "$LATEST_IMAGE"
-    docker push "$LATEST_IMAGE"
+    if [ "${FORCE_LOCAL_BUILD}" = "1" ]; then
+        docker tag "$FULL_IMAGE" "$LATEST_IMAGE"
+        docker push "$LATEST_IMAGE"
+    else
+        gcloud container images add-tag "$FULL_IMAGE" "$LATEST_IMAGE" --quiet
+    fi
 fi
 
 print_info "Build and push complete!"

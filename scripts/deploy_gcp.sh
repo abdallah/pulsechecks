@@ -32,6 +32,7 @@ print_error() {
 # Get script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+GCP_TFVARS_FILE="$PROJECT_ROOT/infra/gcp/gcp.auto.tfvars"
 
 # Configuration
 export GCP_PROJECT_ID=${GCP_PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}
@@ -90,8 +91,19 @@ fi
 # Build and push Docker image
 print_header "1/4 - Building and Pushing Docker Image"
 cd "$PROJECT_ROOT/backend"
+IMAGE_TAG="$(date +%Y%m%d%H%M%S)-$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo manual)"
+FULL_IMAGE="gcr.io/${GCP_PROJECT_ID}/pulsechecks-api:${IMAGE_TAG}"
 print_info "Building Docker image for Cloud Run..."
-./build_docker_gcp.sh "$GCP_PROJECT_ID" latest
+./build_docker_gcp.sh "$GCP_PROJECT_ID" "$IMAGE_TAG"
+
+if [ ! -f "$GCP_TFVARS_FILE" ]; then
+    print_error "Expected tfvars file not found: $GCP_TFVARS_FILE"
+    exit 1
+fi
+
+print_info "Updating Cloud Run image reference in $(basename "$GCP_TFVARS_FILE")..."
+perl -0pi -e 's#container_image\s*=\s*"[^"]+"#container_image = "'"$FULL_IMAGE"'"#' "$GCP_TFVARS_FILE"
+print_info "Using container image: $FULL_IMAGE"
 echo ""
 
 # Deploy infrastructure

@@ -10,6 +10,7 @@ from ..models import AlertChannel, AlertChannelType, Permission
 from ..utils import get_iso_timestamp
 from ..config import get_settings
 from ..ssrf_utils import validate_webhook_url_strict, SSRFValidationError
+from ..posthog_client import get_posthog_client, new_context, identify_context
 
 router = APIRouter(prefix="/teams/{team_id}/channels", tags=["alert-channels"])
 
@@ -97,7 +98,20 @@ async def create_alert_channel(
     )
     
     await db.create_alert_channel(channel)
-    
+
+    posthog = get_posthog_client()
+    with new_context(client=posthog):
+        identify_context(current_user.user_id)
+        posthog.capture(
+            distinct_id=current_user.user_id,
+            event="alert_channel_created",
+            properties={
+                "team_id": team_id,
+                "channel_type": alert_type.value,
+                "shared": shared,
+            },
+        )
+
     return {
         "channelId": channel.channel_id,
         "teamId": channel.team_id,
@@ -211,7 +225,20 @@ async def delete_alert_channel(
             print(f"Warning: Failed to delete SNS topic {topic_arn}: {e}")
     
     await db.delete_alert_channel(team_id, channel_id)
-    
+
+    posthog = get_posthog_client()
+    with new_context(client=posthog):
+        identify_context(current_user.user_id)
+        posthog.capture(
+            distinct_id=current_user.user_id,
+            event="alert_channel_deleted",
+            properties={
+                "team_id": team_id,
+                "channel_type": channel.type.value,
+                "shared": channel.shared,
+            },
+        )
+
     return {"message": "Alert channel deleted successfully"}
 
 

@@ -24,3 +24,6 @@ croniter>=6.0.0
 
 # Performance & Caching
 cachetools==6.2.4
+
+# Analytics
+posthog>=3.0.0

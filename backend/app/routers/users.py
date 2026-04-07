@@ -11,6 +11,7 @@ from ..dependencies import AuthUser, Database
 from ..models import UserResponse, User, TeamMember, Role
 from ..utils import get_iso_timestamp
 from ..config import get_settings
+from ..posthog_client import get_posthog_client, new_context, identify_context
 
 router = APIRouter(prefix="/me", tags=["users"])
 
@@ -61,7 +62,20 @@ async def get_current_user_profile(
             last_login_at=now,
         )
         await db.create_user(user)
-        
+
+        posthog = get_posthog_client()
+        with new_context(client=posthog):
+            identify_context(current_user.user_id)
+            posthog.set(
+                distinct_id=current_user.user_id,
+                properties={"name": current_user.name},
+            )
+            posthog.capture(
+                distinct_id=current_user.user_id,
+                event="user_registered",
+                properties={"invited_teams_count": 0},
+            )
+
         # Process any pending invitations for this email
         pending_invitations = await db.get_pending_invitations_for_email(current_user.email)
         for invitation in pending_invitations:

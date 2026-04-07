@@ -1,9 +1,26 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Users, Plus, Trash2, Shield, Bell, Webhook, Settings, X, MessageSquare, Send, PlayCircle } from 'lucide-react'
+import { ArrowLeft, Users, Plus, Trash2, Shield, Bell, Webhook, Settings, X, MessageSquare, Send, PlayCircle, Download, FileText } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+
+function toDateTimeLocalValue(date) {
+  const offsetMilliseconds = date.getTimezoneOffset() * 60000
+  return new Date(date.getTime() - offsetMilliseconds).toISOString().slice(0, 16)
+}
+
+function createDefaultReportForm() {
+  const now = new Date()
+  const dayAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000))
+  return {
+    reportType: 'summary',
+    format: 'json',
+    checkId: '',
+    fromAt: toDateTimeLocalValue(dayAgo),
+    toAt: toDateTimeLocalValue(now),
+  }
+}
 
 export default function TeamSettingsPage({ user, onLogout }) {
   const { teamId } = useParams()
@@ -42,6 +59,11 @@ export default function TeamSettingsPage({ user, onLogout }) {
   const [newTokenName, setNewTokenName] = useState('')
   const [createdToken, setCreatedToken] = useState(null)
   const [showCreateToken, setShowCreateToken] = useState(false)
+  const [reports, setReports] = useState([])
+  const [reportChecks, setReportChecks] = useState([])
+  const [reportForm, setReportForm] = useState(() => createDefaultReportForm())
+  const [creatingReport, setCreatingReport] = useState(false)
+  const [downloadingReport, setDownloadingReport] = useState(null)
 
   useEffect(() => {
     loadTeam()
@@ -52,6 +74,9 @@ export default function TeamSettingsPage({ user, onLogout }) {
       loadChannels()
     } else if (activeTab === 'tokens') {
       loadApiTokens()
+    } else if (activeTab === 'reports') {
+      loadReports()
+      loadReportChecks()
     }
   }, [teamId, activeTab])
 
@@ -156,7 +181,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
 
   async function handleAddWebhook() {
     if (!newWebhookUrl.trim()) return
-    
+
     try {
       await api.addTeamMattermostWebhook(teamId, newWebhookUrl.trim())
       setNewWebhookUrl('')
@@ -168,7 +193,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
 
   async function handleRemoveWebhook(webhookUrl) {
     if (!confirm('Are you sure you want to remove this webhook?')) return
-    
+
     try {
       await api.removeTeamMattermostWebhook(teamId, webhookUrl)
       loadMattermostWebhooks()
@@ -198,7 +223,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
         configuration: newChannelConfig,
         shared: newAlertShared
       }
-      
+
       await api.createAlertChannel(teamId, channelData)
       setNewAlertName('')
       setNewAlertDisplayName('')
@@ -228,6 +253,78 @@ export default function TeamSettingsPage({ user, onLogout }) {
       setApiTokens(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Failed to load API tokens:', error)
+    }
+  }
+
+  async function loadReports() {
+    try {
+      const data = await api.listReports(teamId)
+      setReports(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Failed to load reports:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadReportChecks() {
+    try {
+      const data = await api.listChecks(teamId)
+      setReportChecks(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error('Failed to load checks for reports:', error)
+      setReportChecks([])
+    }
+  }
+
+  async function handleCreateReport(event) {
+    event.preventDefault()
+    setCreatingReport(true)
+    try {
+      await api.createReport(teamId, {
+        reportType: reportForm.reportType,
+        format: reportForm.format,
+        checkId: reportForm.checkId || undefined,
+        from: new Date(reportForm.fromAt).toISOString(),
+        to: new Date(reportForm.toAt).toISOString(),
+      })
+      toast.success('Report generated successfully')
+      loadReports()
+    } catch (error) {
+      toast.error('Failed to generate report: ' + error.message)
+    } finally {
+      setCreatingReport(false)
+    }
+  }
+
+  async function handleDownloadReport(reportId) {
+    setDownloadingReport(reportId)
+    try {
+      const { blob, filename } = await api.downloadReport(teamId, reportId)
+      const downloadUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(downloadUrl)
+      toast.success('Download started')
+    } catch (error) {
+      toast.error('Failed to download report: ' + error.message)
+    } finally {
+      setDownloadingReport(null)
+    }
+  }
+
+  async function handleDeleteReport(reportId) {
+    if (!confirm('Delete this generated report?')) return
+    try {
+      await api.deleteReport(teamId, reportId)
+      toast.success('Report deleted')
+      loadReports()
+    } catch (error) {
+      toast.error('Failed to delete report: ' + error.message)
     }
   }
 
@@ -355,14 +452,14 @@ export default function TeamSettingsPage({ user, onLogout }) {
 
   async function handleUpdateChannel(e) {
     e.preventDefault()
-    
+
     try {
       const updateData = {
         displayName: editingChannel.displayName,
         configuration: editingChannel.configuration,
         shared: editingChannel.shared
       }
-      
+
       await api.updateAlertChannel(teamId, editingChannel.channelId, updateData)
       setEditingChannel(null)
       loadChannels()
@@ -590,6 +687,17 @@ export default function TeamSettingsPage({ user, onLogout }) {
             >
               <Shield className="h-4 w-4 inline mr-2" />
               API Tokens
+            </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'reports'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <FileText className="h-4 w-4 inline mr-2" />
+              Reports
             </button>
             <button
               onClick={() => setActiveTab('danger')}
@@ -962,6 +1070,135 @@ export default function TeamSettingsPage({ user, onLogout }) {
           </div>
         )}
 
+        {activeTab === 'reports' && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
+                <FileText className="h-5 w-5 mr-2" />
+                Downloadable Reports
+              </h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                Generate JSON or CSV exports for uptime, errors, performance, or an overall summary.
+              </p>
+            </div>
+
+            <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+              <form onSubmit={handleCreateReport} className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <label className="text-sm text-gray-600">
+                  <span className="mb-1 block font-medium text-gray-700">Report Type</span>
+                  <select
+                    value={reportForm.reportType}
+                    onChange={(e) => setReportForm({ ...reportForm, reportType: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                  >
+                    <option value="summary">Summary</option>
+                    <option value="uptime">Uptime</option>
+                    <option value="errors">Errors</option>
+                    <option value="performance">Performance</option>
+                  </select>
+                </label>
+
+                <label className="text-sm text-gray-600">
+                  <span className="mb-1 block font-medium text-gray-700">Format</span>
+                  <select
+                    value={reportForm.format}
+                    onChange={(e) => setReportForm({ ...reportForm, format: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                  >
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                  </select>
+                </label>
+
+                <label className="text-sm text-gray-600">
+                  <span className="mb-1 block font-medium text-gray-700">Scope</span>
+                  <select
+                    value={reportForm.checkId}
+                    onChange={(e) => setReportForm({ ...reportForm, checkId: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                  >
+                    <option value="">Entire team</option>
+                    {reportChecks.map((check) => (
+                      <option key={check.checkId} value={check.checkId}>{check.name}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm text-gray-600">
+                  <span className="mb-1 block font-medium text-gray-700">From</span>
+                  <input
+                    type="datetime-local"
+                    value={reportForm.fromAt}
+                    onChange={(e) => setReportForm({ ...reportForm, fromAt: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                    required
+                  />
+                </label>
+
+                <label className="text-sm text-gray-600">
+                  <span className="mb-1 block font-medium text-gray-700">To</span>
+                  <input
+                    type="datetime-local"
+                    value={reportForm.toAt}
+                    onChange={(e) => setReportForm({ ...reportForm, toAt: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700"
+                    required
+                  />
+                </label>
+
+                <div className="md:col-span-2 xl:col-span-5">
+                  <button
+                    type="submit"
+                    disabled={creatingReport}
+                    className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {creatingReport ? 'Generating...' : 'Generate Report'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div className="border-t border-gray-200">
+              {reports.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-gray-500 text-center">No reports generated yet.</p>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {reports.map((report) => (
+                    <li key={report.reportId} className="px-4 py-4 flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {report.reportType} · {report.format.toUpperCase()} {report.checkId ? '· Check scope' : '· Team scope'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(report.createdAt).toLocaleString()} · Expires {new Date(report.expiresAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleDownloadReport(report.reportId)}
+                          disabled={downloadingReport === report.reportId}
+                          className="inline-flex items-center px-3 py-1 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 disabled:opacity-50"
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          {downloadingReport === report.reportId ? 'Downloading...' : 'Download'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteReport(report.reportId)}
+                          className="inline-flex items-center px-3 py-1 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* API Tokens Tab */}
         {activeTab === 'tokens' && (
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
@@ -1080,7 +1317,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
                 Irreversible and destructive actions.
               </p>
             </div>
-            
+
             <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
               <div className="bg-red-50 border border-red-200 rounded-lg p-6">
                 <div className="flex items-start">
@@ -1101,7 +1338,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
                       <li>All alert channels and configurations</li>
                       <li>All Mattermost webhook integrations</li>
                     </ul>
-                    
+
                     <div className="mt-4">
                       <button
                         onClick={() => setShowDeleteConfirm(true)}

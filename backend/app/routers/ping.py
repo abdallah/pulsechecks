@@ -16,6 +16,7 @@ from ..utils import (
 )
 from ..logging_config import get_logger, log_business_event
 from ..metrics import get_metrics_client
+from ..posthog_client import get_posthog_client
 
 logger = get_logger(__name__)
 from ..config import get_settings
@@ -27,11 +28,13 @@ async def _record_ping_internal(
     token: str,
     db: Database,
     ping_type: PingType = PingType.SUCCESS,
-    data: Optional[str] = None
+    data: Optional[str] = None,
+    code: Optional[str] = None,
+    response_time_ms: Optional[int] = None,
 ) -> OkResponse:
     """Internal helper to record a ping."""
     metrics = get_metrics_client()
-    
+
     # Look up check by token
     check = await db.get_check_by_token(token)
 
@@ -53,7 +56,7 @@ async def _record_ping_internal(
     # Check if this is a recovery (late -> up transition) or first ping (pending -> up)
     was_late = check.status == CheckStatus.LATE.value
     was_pending = check.status == CheckStatus.PENDING.value
-    
+
     # Record ping
     timestamp = get_iso_timestamp()
     current_time_seconds = get_current_time_seconds()
@@ -63,7 +66,9 @@ async def _record_ping_internal(
         timestamp=timestamp,
         received_at=timestamp,
         ping_type=ping_type.value,
+        code=code,
         data=data,
+        response_time_ms=response_time_ms,
     )
     await db.create_ping(ping)
 
@@ -108,19 +113,40 @@ async def _record_ping_internal(
         # Reset alert state if check recovered (late -> up)
         if was_late and ping_type == PingType.SUCCESS:
             await db.reset_alert_state(check.team_id, check.check_id)
-        
+
         # Record successful ping metrics
         metrics.ping_received(check.team_id, check.check_id, True)
-        
+
         # Log business event
-        log_business_event('ping_received', 
-            team_id=check.team_id, 
-            check_id=check.check_id, 
+        log_business_event('ping_received',
+            team_id=check.team_id,
+            check_id=check.check_id,
             ping_type=ping_type.value,
             was_late=was_late,
             was_pending=was_pending
         )
-        
+
+        posthog = get_posthog_client()
+        posthog.capture(
+            distinct_id=check.team_id,
+            event="ping_received",
+            properties={
+                "check_id": check.check_id,
+                "ping_type": ping_type.value,
+                "was_late": was_late,
+                "check_type": check.type,
+            },
+        )
+        if was_late and ping_type == PingType.SUCCESS:
+            posthog.capture(
+                distinct_id=check.team_id,
+                event="check_recovered",
+                properties={
+                    "check_id": check.check_id,
+                    "check_type": check.type,
+                },
+            )
+
         # Send recovery alert if check was late and is now up
         if was_late and ping_type == PingType.SUCCESS:
             try:
@@ -130,7 +156,7 @@ async def _record_ping_internal(
                 logger.error(f"Recovery alert failed for check {check.check_id}: {e}")
                 metrics.alert_sent(check.team_id, check.check_id, 'recovery', False)
                 # Continue - don't let alert failure break the ping
-            
+
         message = "Ping recorded" if ping_type == PingType.SUCCESS else "Failure recorded"
         return OkResponse(message=message)
     else:
@@ -145,10 +171,10 @@ async def _send_recovery_alert_async(check):
     try:
         from ..db import DynamoDBClient
         db = DynamoDBClient()
-        
+
         # Get team info for alert channels
         team = await db.get_team(check.team_id)
-        
+
         # Send recovery alerts via modern AlertChannels only
         if check.alert_channels:
             for channel_id in check.alert_channels:
@@ -157,18 +183,18 @@ async def _send_recovery_alert_async(check):
                     if not channel:
                         logger.warning(f"Recovery alert channel {channel_id} not found for check {check.check_id}")
                         continue
-                    
+
                     # Send recovery alert via the channel
                     from ..handlers import _send_channel_alert
                     success = await _send_channel_alert(channel, check, team, None, None, "recovery")
                     if success:
                         logger.info(f"Recovery alert sent via channel {channel.name} ({channel.type.value}) for check {check.check_id}")
-                    
+
                 except Exception as e:
                     logger.error(f"Failed to send recovery alert via channel {channel_id} for check {check.check_id}: {e}")
         else:
             logger.info(f"No alert channels configured for check {check.check_id} - no recovery alert sent")
-                    
+
     except Exception as e:
         logger.error(f"Error in _send_recovery_alert_async: {e}")
         raise  # Re-raise so the caller can handle it

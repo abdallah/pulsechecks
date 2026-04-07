@@ -9,8 +9,14 @@ import { renderWithToast } from './test-utils'
 vi.mock('../lib/api', () => ({
   api: {
     getCheck: vi.fn(),
+    getCheckStats: vi.fn(),
+    getCheckErrorSummary: vi.fn(),
+    getCheckUptime: vi.fn(),
     getTeam: vi.fn().mockResolvedValue({ teamId: 'team-123', name: 'Test Team', slug: 'test-team' }),
     listPings: vi.fn(),
+    listMaintenanceWindows: vi.fn(),
+    createMaintenanceWindow: vi.fn(),
+    deleteMaintenanceWindow: vi.fn(),
     listAlertChannels: vi.fn(),
     listTeams: vi.fn(),
     updateCheck: vi.fn(),
@@ -77,6 +83,69 @@ describe('CheckDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     api.getCheck.mockResolvedValue(mockCheck)
+    api.getCheckStats.mockResolvedValue({
+      period: '24h',
+      uptimePct: 99.5,
+      totalPings: 20,
+      successCount: 19,
+      failCount: 1,
+      avgResponseMs: 145,
+      p95ResponseMs: 280,
+      maxResponseMs: 300,
+      minResponseMs: 100,
+      latestResponseMs: 125,
+      responseTimeSeries: [
+        { timestamp: '2024-12-24T10:00:00Z', responseTimeMs: 125, pingType: 'success' },
+        { timestamp: '2024-12-24T09:30:00Z', responseTimeMs: 280, pingType: 'fail' },
+      ],
+    })
+    api.getCheckErrorSummary.mockResolvedValue({
+      period: '24h',
+      totalFailures: 2,
+      mostCommonCode: '503',
+      lastFailureAt: '2024-12-24T09:30:00Z',
+      longestIncident: {
+        startedAt: '2024-12-24T09:25:00Z',
+        endedAt: '2024-12-24T09:30:00Z',
+        durationSeconds: 300,
+        failureCount: 2,
+        dominantCode: '503',
+      },
+      failureCodes: [
+        { code: '503', count: 2 },
+      ],
+      recentFailures: [
+        {
+          checkId: 'check-123',
+          timestamp: '1735032600000',
+          receivedAt: '2024-12-24T09:30:00Z',
+          pingType: 'fail',
+          code: '503',
+          data: 'Service unavailable',
+          responseTimeMs: 280,
+        },
+      ],
+    })
+    api.getCheckUptime.mockResolvedValue({
+      from: '2024-12-23T10:00:00Z',
+      to: '2024-12-24T10:00:00Z',
+      excludeMaintenance: true,
+      uptimePct: 97.2,
+      totalObservedMinutes: 1440,
+      downtimeMinutes: 40,
+      excludedMaintenanceMinutes: 20,
+      incidents: [
+        {
+          startedAt: '2024-12-24T09:00:00Z',
+          endedAt: '2024-12-24T09:20:00Z',
+          durationSeconds: 1200,
+          failureCount: 2,
+          dominantCode: '503',
+        },
+      ],
+      maintenanceWindows: [],
+    })
+    api.listMaintenanceWindows.mockResolvedValue([])
     api.listAlertChannels.mockResolvedValue([])
     api.listTeams.mockResolvedValue([])
   })
@@ -157,6 +226,22 @@ describe('CheckDetailPage', () => {
       expect(screen.getByText('Monitored URL')).toBeInTheDocument()
     })
 
+    await waitFor(() => {
+      expect(api.getCheckStats).toHaveBeenCalledWith('team-123', 'check-123', '24h')
+      expect(api.getCheckErrorSummary).toHaveBeenCalledWith('team-123', 'check-123', '24h')
+      expect(api.getCheckUptime).toHaveBeenCalled()
+      expect(api.listMaintenanceWindows).toHaveBeenCalledWith('team-123', 'check-123')
+      expect(screen.getByText('Performance History')).toBeInTheDocument()
+      expect(screen.getByText('Error Analysis')).toBeInTheDocument()
+      expect(screen.getByText('Uptime Report')).toBeInTheDocument()
+      expect(screen.getByText('97.2%')).toBeInTheDocument()
+      expect(screen.getByText('40 min')).toBeInTheDocument()
+      expect(screen.getByText((_, element) => element?.textContent === '145 ms')).toBeInTheDocument()
+      expect(screen.getByText('99.5%')).toBeInTheDocument()
+      expect(screen.getAllByText('503').length).toBeGreaterThan(0)
+      expect(screen.getByText('Service unavailable')).toBeInTheDocument()
+    })
+
     // Edit button should be visible (HTTP check edit specifically)
     const editButtons = screen.getAllByRole('button', { name: /edit/i })
     const httpEditBtn = editButtons.find(btn => btn.textContent.includes('Edit') && btn.querySelector('svg'))
@@ -175,6 +260,39 @@ describe('CheckDetailPage', () => {
     await waitFor(() => {
       expect(api.updateCheck).toHaveBeenCalledWith('team-123', 'check-123', expect.objectContaining({
         url: 'https://example.com/new',
+      }))
+    })
+  })
+
+  test('creates a team-wide maintenance window from the uptime form', async () => {
+    const httpCheck = {
+      ...mockCheck,
+      type: 'http',
+      url: 'https://example.com/health',
+      expectedStatusCode: 200,
+      expectedString: null,
+      failureThreshold: 1,
+    }
+    api.getCheck.mockResolvedValue(httpCheck)
+    api.listPings.mockResolvedValueOnce([])
+    api.createMaintenanceWindow.mockResolvedValue({ ok: true })
+
+    renderCheckDetailPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Uptime Report')).toBeInTheDocument()
+    })
+
+    const addMaintenanceButton = await screen.findByRole('button', { name: 'Add maintenance window' })
+    const maintenanceForm = addMaintenanceButton.closest('form')
+    const scopeSelect = maintenanceForm.querySelector('select')
+
+    fireEvent.change(scopeSelect, { target: { value: 'team' } })
+    fireEvent.click(addMaintenanceButton)
+
+    await waitFor(() => {
+      expect(api.createMaintenanceWindow).toHaveBeenCalledWith('team-123', expect.objectContaining({
+        checkId: undefined,
       }))
     })
   })

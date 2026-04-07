@@ -14,6 +14,7 @@ from ..models import (
 )
 from ..utils import generate_id, get_iso_timestamp, generate_slug
 from ..logging_config import log_business_event
+from ..posthog_client import get_posthog_client, new_context, identify_context
 
 router = APIRouter(prefix="/teams", tags=["teams"])
 
@@ -47,6 +48,15 @@ async def create_team(
         joined_at=get_iso_timestamp(),
     )
     await db.add_team_member(member)
+
+    posthog = get_posthog_client()
+    with new_context(client=posthog):
+        identify_context(current_user.user_id)
+        posthog.capture(
+            distinct_id=current_user.user_id,
+            event="team_created",
+            properties={"team_id": team_id},
+        )
 
     return TeamResponse(
         teamId=team_id,
@@ -215,7 +225,16 @@ async def add_team_member(
             joined_at=get_iso_timestamp(),
         )
         await db.add_team_member(new_member)
-        
+
+        posthog = get_posthog_client()
+        with new_context(client=posthog):
+            identify_context(current_user.user_id)
+            posthog.capture(
+                distinct_id=current_user.user_id,
+                event="team_member_added",
+                properties={"team_id": team_id, "member_role": role.value},
+            )
+
         return {
             "userId": user.user_id,
             "email": user.email,
@@ -230,13 +249,13 @@ async def add_team_member(
             role = Role(role_str)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid role")
-        
+
         # Check if invitation already exists
         existing_invitations = await db.get_pending_invitations_for_email(email)
         for inv in existing_invitations:
             if inv.team_id == team_id:
                 raise HTTPException(status_code=400, detail="User already has a pending invitation to this team")
-        
+
         # Create pending invitation
         invitation = PendingInvitation(
             email=email,
@@ -246,7 +265,16 @@ async def add_team_member(
             invited_at=get_iso_timestamp(),
         )
         await db.create_pending_invitation(invitation)
-        
+
+        posthog = get_posthog_client()
+        with new_context(client=posthog):
+            identify_context(current_user.user_id)
+            posthog.capture(
+                distinct_id=current_user.user_id,
+                event="team_member_invited",
+                properties={"team_id": team_id, "invitee_role": role.value},
+            )
+
         return {
             "userId": None,
             "email": email,
@@ -503,5 +531,14 @@ async def delete_team(
     
     # Perform cascade delete
     await db.delete_team(team_id)
-    
+
+    posthog = get_posthog_client()
+    with new_context(client=posthog):
+        identify_context(current_user.user_id)
+        posthog.capture(
+            distinct_id=current_user.user_id,
+            event="team_deleted",
+            properties={"team_id": team_id},
+        )
+
     return {"message": f"Team '{team.name}' and all associated data deleted successfully"}

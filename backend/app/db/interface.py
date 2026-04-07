@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 
 from ..models import (
     User, Team, TeamMember, Check, Ping, Role,
-    PendingInvitation, AlertChannel
+    PendingInvitation, AlertChannel, MaintenanceWindow, Report
 )
 
 
@@ -201,6 +201,52 @@ class DatabaseInterface(ABC):
     @abstractmethod
     async def list_check_pings(self, check_id: str, limit: int = 50, since: int = None) -> List[Ping]:
         """List recent pings for a check."""
+        pass
+
+    @abstractmethod
+    async def list_check_pings_between(
+        self,
+        check_id: str,
+        start_at: str,
+        end_at: str,
+        limit: int = 10000,
+    ) -> List[Ping]:
+        """List pings for a check inside an inclusive ISO timestamp range."""
+        pass
+
+    @abstractmethod
+    async def create_maintenance_window(self, window: MaintenanceWindow) -> None:
+        """Create a maintenance window."""
+        pass
+
+    @abstractmethod
+    async def list_maintenance_windows(self, team_id: str, check_id: str | None = None) -> List[MaintenanceWindow]:
+        """List maintenance windows for a team, optionally filtered to a check plus team-wide windows."""
+        pass
+
+    @abstractmethod
+    async def delete_maintenance_window(self, team_id: str, window_id: str) -> None:
+        """Delete a maintenance window."""
+        pass
+
+    @abstractmethod
+    async def create_report(self, report: Report) -> None:
+        """Persist a generated report record."""
+        pass
+
+    @abstractmethod
+    async def get_report(self, team_id: str, report_id: str) -> Optional[Report]:
+        """Get a report by ID."""
+        pass
+
+    @abstractmethod
+    async def list_reports(self, team_id: str) -> List[Report]:
+        """List reports for a team."""
+        pass
+
+    @abstractmethod
+    async def delete_report(self, team_id: str, report_id: str) -> None:
+        """Delete a report and its stored content."""
         pass
 
     # Late detection

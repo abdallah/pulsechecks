@@ -210,7 +210,7 @@ def test_rotate_check_token_success(mock_create_db, mock_verify, client, mock_us
         role=Role.ADMIN,
         joined_at="2025-01-01T00:00:00Z",
     ))
-    
+
     # Mock check
     mock_check = Check(
         check_id="check-123",
@@ -223,7 +223,7 @@ def test_rotate_check_token_success(mock_create_db, mock_verify, client, mock_us
         created_at="2025-01-01T00:00:00Z",
     )
     mock_db.get_check = AsyncMock(return_value=mock_check)
-    
+
     # Mock updated check with new token
     updated_check = Check(
         check_id="check-123",
@@ -312,7 +312,7 @@ def test_delete_check_success(mock_create_db, mock_verify, client, mock_user, mo
         role=Role.ADMIN,
         joined_at="2025-01-01T00:00:00Z",
     ))
-    
+
     # Mock check
     mock_check = Check(
         check_id="check-123",
@@ -431,14 +431,18 @@ def mock_pings():
             "timestamp": "1735027200000",  # 2024-12-24 10:00:00
             "receivedAt": "2024-12-24T10:00:00Z",
             "pingType": "success",
-            "data": "Test ping 1"
+            "data": "Test ping 1",
+            "code": None,
+            "responseTimeMs": 123,
         },
         {
-            "checkId": "check-123", 
+            "checkId": "check-123",
             "timestamp": "1735023600000",  # 2024-12-24 09:00:00
             "receivedAt": "2024-12-24T09:00:00Z",
             "pingType": "success",
-            "data": "Test ping 2"
+            "data": "Test ping 2",
+            "code": None,
+            "responseTimeMs": 156,
         }
     ]
 
@@ -453,11 +457,11 @@ def test_list_check_pings_without_since(mock_create_db, mock_verify, client, moc
         "email": "test@example.com",
         "name": "Test User"
     }
-    
+
     # Mock database
     mock_db = MagicMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock team membership
     mock_db.get_team_member = AsyncMock(return_value=TeamMember(
         team_id="team-123",
@@ -465,7 +469,7 @@ def test_list_check_pings_without_since(mock_create_db, mock_verify, client, moc
         role=Role.MEMBER,
         joined_at="2025-01-01T00:00:00Z",
     ))
-    
+
     # Mock check
     mock_check = Check(
         check_id="check-123",
@@ -478,7 +482,7 @@ def test_list_check_pings_without_since(mock_create_db, mock_verify, client, moc
         created_at="2025-01-01T00:00:00Z",
     )
     mock_db.get_check = AsyncMock(return_value=mock_check)
-    
+
     # Mock pings
     from app.models import Ping
     mock_ping_objects = [
@@ -487,7 +491,9 @@ def test_list_check_pings_without_since(mock_create_db, mock_verify, client, moc
             timestamp=ping["timestamp"],
             received_at=ping["receivedAt"],
             ping_type=ping["pingType"],
-            data=ping["data"]
+            data=ping["data"],
+            code=ping["code"],
+            response_time_ms=ping["responseTimeMs"],
         ) for ping in mock_pings
     ]
     mock_db.list_check_pings = AsyncMock(return_value=mock_ping_objects)
@@ -502,7 +508,8 @@ def test_list_check_pings_without_since(mock_create_db, mock_verify, client, moc
     assert len(data) == 2
     assert data[0]["checkId"] == "check-123"
     assert data[0]["data"] == "Test ping 1"
-    
+    assert data[0]["responseTimeMs"] == 123
+
     # Verify database call without since parameter
     mock_db.list_check_pings.assert_called_once_with("check-123", 50, None)
 
@@ -517,11 +524,11 @@ def test_list_check_pings_with_since(mock_create_db, mock_verify, client, mock_u
         "email": "test@example.com",
         "name": "Test User"
     }
-    
+
     # Mock database
     mock_db = MagicMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock team membership
     mock_db.get_team_member = AsyncMock(return_value=TeamMember(
         team_id="team-123",
@@ -529,7 +536,7 @@ def test_list_check_pings_with_since(mock_create_db, mock_verify, client, mock_u
         role=Role.MEMBER,
         joined_at="2025-01-01T00:00:00Z",
     ))
-    
+
     # Mock check
     mock_check = Check(
         check_id="check-123",
@@ -542,7 +549,7 @@ def test_list_check_pings_with_since(mock_create_db, mock_verify, client, mock_u
         created_at="2025-01-01T00:00:00Z",
     )
     mock_db.get_check = AsyncMock(return_value=mock_check)
-    
+
     # Mock filtered pings (only one ping after the since timestamp)
     from app.models import Ping
     filtered_pings = [mock_pings[0]]  # Only the newer ping
@@ -552,7 +559,9 @@ def test_list_check_pings_with_since(mock_create_db, mock_verify, client, mock_u
             timestamp=ping["timestamp"],
             received_at=ping["receivedAt"],
             ping_type=ping["pingType"],
-            data=ping["data"]
+            data=ping["data"],
+            code=ping["code"],
+            response_time_ms=ping["responseTimeMs"],
         ) for ping in filtered_pings
     ]
     mock_db.list_check_pings = AsyncMock(return_value=mock_ping_objects)
@@ -569,9 +578,71 @@ def test_list_check_pings_with_since(mock_create_db, mock_verify, client, mock_u
     assert len(data) == 1
     assert data[0]["checkId"] == "check-123"
     assert data[0]["data"] == "Test ping 1"
-    
+
     # Verify database call with since parameter
     mock_db.list_check_pings.assert_called_once_with("check-123", 100, since_timestamp)
+
+
+@patch("app.dependencies.verify_jwt_token")
+@patch('app.dependencies.create_db_client')
+def test_list_check_pings_with_type_filter(mock_create_db, mock_verify, client, mock_user, mock_jwt_token):
+    """Test listing check pings filtered to failures."""
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "name": "Test User"
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.MEMBER,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.get_check = AsyncMock(return_value=Check(
+        check_id="check-123",
+        team_id="team-123",
+        name="Test Check",
+        token="test-token",
+        period_seconds=3600,
+        grace_seconds=600,
+        status=CheckStatus.UP,
+        created_at="2025-01-01T00:00:00Z",
+    ))
+
+    from app.models import Ping
+    mock_db.list_check_pings = AsyncMock(return_value=[
+        Ping(
+            check_id="check-123",
+            timestamp="1735027200000",
+            received_at="2024-12-24T10:00:00Z",
+            ping_type="success",
+            data="success",
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="1735023600000",
+            received_at="2024-12-24T09:00:00Z",
+            ping_type="fail",
+            code="503",
+            data="backend unavailable",
+            response_time_ms=480,
+        ),
+    ])
+
+    response = client.get(
+        "/teams/team-123/checks/check-123/pings?limit=10&type=fail",
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["pingType"] == "fail"
+    assert data[0]["code"] == "503"
+    mock_db.list_check_pings.assert_called_once_with("check-123", 5000, None)
 
 
 @patch("app.dependencies.verify_jwt_token")
@@ -584,11 +655,11 @@ def test_list_check_pings_check_not_found(mock_create_db, mock_verify, client, m
         "email": "test@example.com",
         "name": "Test User"
     }
-    
+
     # Mock database
     mock_db = MagicMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock team membership
     mock_db.get_team_member = AsyncMock(return_value=TeamMember(
         team_id="team-123",
@@ -596,7 +667,7 @@ def test_list_check_pings_check_not_found(mock_create_db, mock_verify, client, m
         role=Role.MEMBER,
         joined_at="2025-01-01T00:00:00Z",
     ))
-    
+
     # Mock check not found
     mock_db.get_check = AsyncMock(return_value=None)
 
@@ -612,6 +683,498 @@ def test_list_check_pings_check_not_found(mock_create_db, mock_verify, client, m
 
 @patch("app.dependencies.verify_jwt_token")
 @patch('app.dependencies.create_db_client')
+def test_get_check_stats(mock_create_db, mock_verify, client, mock_jwt_token):
+    """Test aggregated stats for an HTTP check."""
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "name": "Test User",
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.MEMBER,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.get_check = AsyncMock(return_value=Check(
+        check_id="check-123",
+        team_id="team-123",
+        name="Test HTTP Check",
+        token="test-token",
+        period_seconds=300,
+        grace_seconds=60,
+        status=CheckStatus.UP,
+        created_at="2025-01-01T00:00:00Z",
+        type="http",
+        url="https://example.com/health",
+    ))
+
+    from app.models import Ping
+    mock_db.list_check_pings = AsyncMock(return_value=[
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:00:00+00:00",
+            received_at="2026-04-07T08:00:00+00:00",
+            ping_type="success",
+            response_time_ms=120,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:10:00+00:00",
+            received_at="2026-04-07T08:10:00+00:00",
+            ping_type="fail",
+            code="503",
+            response_time_ms=450,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:20:00+00:00",
+            received_at="2026-04-07T08:20:00+00:00",
+            ping_type="success",
+            response_time_ms=180,
+        ),
+    ])
+
+    response = client.get(
+        "/teams/team-123/checks/check-123/stats?range=24h",
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["period"] == "24h"
+    assert data["totalPings"] == 3
+    assert data["successCount"] == 2
+    assert data["failCount"] == 1
+    assert data["avgResponseMs"] == 250
+    assert data["p95ResponseMs"] == 450
+    assert data["latestResponseMs"] == 180
+    assert data["responseTimeSeries"][0]["responseTimeMs"] == 120
+
+
+@patch("app.dependencies.verify_jwt_token")
+@patch('app.dependencies.create_db_client')
+def test_get_check_error_summary(mock_create_db, mock_verify, client, mock_jwt_token):
+    """Test aggregated error summary for a check."""
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "name": "Test User",
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.MEMBER,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.get_check = AsyncMock(return_value=Check(
+        check_id="check-123",
+        team_id="team-123",
+        name="Test Check",
+        token="test-token",
+        period_seconds=300,
+        grace_seconds=60,
+        status=CheckStatus.UP,
+        created_at="2025-01-01T00:00:00Z",
+        type="http",
+        url="https://example.com/health",
+    ))
+
+    from app.models import Ping
+    mock_db.list_check_pings = AsyncMock(return_value=[
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:00:00+00:00",
+            received_at="2026-04-07T08:00:00+00:00",
+            ping_type="success",
+            response_time_ms=120,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:05:00+00:00",
+            received_at="2026-04-07T08:05:00+00:00",
+            ping_type="fail",
+            code="503",
+            data="service unavailable",
+            response_time_ms=480,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:10:00+00:00",
+            received_at="2026-04-07T08:10:00+00:00",
+            ping_type="fail",
+            code="503",
+            data="still unavailable",
+            response_time_ms=510,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:15:00+00:00",
+            received_at="2026-04-07T08:15:00+00:00",
+            ping_type="success",
+            response_time_ms=140,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:20:00+00:00",
+            received_at="2026-04-07T08:20:00+00:00",
+            ping_type="fail",
+            code="timeout",
+            data="request timed out",
+            response_time_ms=1000,
+        ),
+    ])
+
+    response = client.get(
+        "/teams/team-123/checks/check-123/errors/summary?range=24h",
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["period"] == "24h"
+    assert data["totalFailures"] == 3
+    assert data["mostCommonCode"] == "503"
+    assert data["lastFailureAt"] == "2026-04-07T08:20:00+00:00"
+    assert data["longestIncident"]["failureCount"] == 2
+    assert data["longestIncident"]["durationSeconds"] == 300
+    assert data["failureCodes"][0] == {"code": "503", "count": 2}
+    assert data["recentFailures"][0]["code"] == "timeout"
+
+
+@patch("app.dependencies.verify_jwt_token")
+@patch('app.dependencies.create_db_client')
+def test_get_check_uptime(mock_create_db, mock_verify, client, mock_jwt_token):
+    """Test uptime summary with maintenance exclusion."""
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "name": "Test User",
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.MEMBER,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.get_check = AsyncMock(return_value=Check(
+        check_id="check-123",
+        team_id="team-123",
+        name="Test Check",
+        token="test-token",
+        period_seconds=300,
+        grace_seconds=60,
+        status=CheckStatus.UP,
+        created_at="2025-01-01T00:00:00Z",
+        type="http",
+        url="https://example.com/health",
+    ))
+
+    from app.models import MaintenanceWindow, Ping
+    mock_db.list_check_pings_between = AsyncMock(return_value=[
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:00:00+00:00",
+            received_at="2026-04-07T08:00:00+00:00",
+            ping_type="success",
+            response_time_ms=100,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:10:00+00:00",
+            received_at="2026-04-07T08:10:00+00:00",
+            ping_type="fail",
+            code="503",
+            response_time_ms=400,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:20:00+00:00",
+            received_at="2026-04-07T08:20:00+00:00",
+            ping_type="success",
+            response_time_ms=110,
+        ),
+    ])
+    mock_db.list_maintenance_windows = AsyncMock(return_value=[
+        MaintenanceWindow(
+            window_id="mw-123",
+            team_id="team-123",
+            check_id="check-123",
+            start_at="2026-04-07T08:12:00+00:00",
+            end_at="2026-04-07T08:15:00+00:00",
+            label="Deploy",
+            created_by="user-123",
+            created_at="2026-04-07T07:50:00+00:00",
+        )
+    ])
+
+    response = client.get(
+        "/teams/team-123/checks/check-123/uptime?from=2026-04-07T08:00:00%2B00:00&to=2026-04-07T08:30:00%2B00:00&exclude_maintenance=true",
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["from"] == "2026-04-07T08:00:00+00:00"
+    assert data["to"] == "2026-04-07T08:30:00+00:00"
+    assert data["excludeMaintenance"] is True
+    assert data["totalObservedMinutes"] == 27.0
+    assert data["downtimeMinutes"] == 7.0
+    assert data["excludedMaintenanceMinutes"] == 3.0
+    assert data["uptimePct"] == 74.07
+    assert data["incidents"][0]["dominantCode"] == "503"
+    assert data["maintenanceWindows"][0]["windowId"] == "mw-123"
+
+
+@patch("app.dependencies.verify_jwt_token")
+@patch('app.dependencies.create_db_client')
+def test_create_maintenance_window(mock_create_db, mock_verify, client, mock_jwt_token):
+    """Test creating a maintenance window for a specific check."""
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "name": "Test User",
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.ADMIN,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.get_check = AsyncMock(return_value=Check(
+        check_id="check-123",
+        team_id="team-123",
+        name="Test Check",
+        token="test-token",
+        period_seconds=300,
+        grace_seconds=60,
+        status=CheckStatus.UP,
+        created_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.create_maintenance_window = AsyncMock()
+
+    response = client.post(
+        "/teams/team-123/maintenance",
+        json={
+            "checkId": "check-123",
+            "startAt": "2026-04-07T12:00:00+00:00",
+            "endAt": "2026-04-07T13:00:00+00:00",
+            "label": "Planned deploy",
+        },
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["teamId"] == "team-123"
+    assert data["checkId"] == "check-123"
+    assert data["label"] == "Planned deploy"
+    mock_db.create_maintenance_window.assert_awaited_once()
+
+
+@patch("app.dependencies.verify_jwt_token")
+@patch('app.dependencies.create_db_client')
+def test_list_maintenance_windows(mock_create_db, mock_verify, client, mock_jwt_token):
+    """Test listing maintenance windows for a check includes team-wide windows."""
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "name": "Test User",
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.MEMBER,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+
+    from app.models import MaintenanceWindow
+    mock_db.list_maintenance_windows = AsyncMock(return_value=[
+        MaintenanceWindow(
+            window_id="mw-team",
+            team_id="team-123",
+            check_id=None,
+            start_at="2026-04-07T12:00:00+00:00",
+            end_at="2026-04-07T13:00:00+00:00",
+            label="Team deploy",
+            created_by="user-123",
+            created_at="2026-04-07T11:00:00+00:00",
+        ),
+        MaintenanceWindow(
+            window_id="mw-check",
+            team_id="team-123",
+            check_id="check-123",
+            start_at="2026-04-08T12:00:00+00:00",
+            end_at="2026-04-08T13:00:00+00:00",
+            label="Check deploy",
+            created_by="user-123",
+            created_at="2026-04-08T11:00:00+00:00",
+        ),
+    ])
+
+    response = client.get(
+        "/teams/team-123/maintenance?check_id=check-123",
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["windowId"] == "mw-team"
+    assert data[1]["windowId"] == "mw-check"
+
+
+@patch("app.dependencies.verify_jwt_token")
+@patch('app.dependencies.create_db_client')
+def test_create_report(mock_create_db, mock_verify, client, mock_jwt_token):
+    """Test generating a downloadable summary report."""
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "name": "Test User",
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.MEMBER,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.list_team_checks = AsyncMock(return_value=[
+        Check(
+            check_id="check-123",
+            team_id="team-123",
+            name="Test HTTP Check",
+            token="test-token",
+            period_seconds=300,
+            grace_seconds=60,
+            status=CheckStatus.UP,
+            created_at="2025-01-01T00:00:00Z",
+            type="http",
+            url="https://example.com/health",
+        )
+    ])
+
+    from app.models import MaintenanceWindow, Ping
+    mock_db.list_check_pings_between = AsyncMock(return_value=[
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:00:00+00:00",
+            received_at="2026-04-07T08:00:00+00:00",
+            ping_type="success",
+            response_time_ms=120,
+        ),
+        Ping(
+            check_id="check-123",
+            timestamp="2026-04-07T08:10:00+00:00",
+            received_at="2026-04-07T08:10:00+00:00",
+            ping_type="fail",
+            code="503",
+            response_time_ms=450,
+        ),
+    ])
+    mock_db.list_maintenance_windows = AsyncMock(return_value=[
+        MaintenanceWindow(
+            window_id="mw-123",
+            team_id="team-123",
+            check_id="check-123",
+            start_at="2026-04-07T08:12:00+00:00",
+            end_at="2026-04-07T08:15:00+00:00",
+            label="Deploy",
+            created_by="user-123",
+            created_at="2026-04-07T07:50:00+00:00",
+        )
+    ])
+    mock_db.create_report = AsyncMock()
+
+    response = client.post(
+        "/teams/team-123/reports",
+        json={
+            "reportType": "summary",
+            "format": "json",
+            "from": "2026-04-07T08:00:00+00:00",
+            "to": "2026-04-07T08:30:00+00:00",
+        },
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["reportType"] == "summary"
+    assert data["format"] == "json"
+    assert data["status"] == "completed"
+    assert data["downloadUrl"].endswith("/download")
+    mock_db.create_report.assert_awaited_once()
+
+
+@patch("app.dependencies.verify_jwt_token")
+@patch('app.dependencies.create_db_client')
+def test_download_report(mock_create_db, mock_verify, client, mock_jwt_token):
+    """Test downloading a generated report."""
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "name": "Test User",
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.MEMBER,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+
+    from app.models import Report
+    mock_db.get_report = AsyncMock(return_value=Report(
+        report_id="report-123",
+        team_id="team-123",
+        check_id=None,
+        report_type="summary",
+        format="json",
+        from_date="2026-04-07T08:00:00+00:00",
+        to_date="2026-04-07T08:30:00+00:00",
+        status="completed",
+        download_url="/teams/team-123/reports/report-123/download",
+        created_at="2026-04-07T09:00:00+00:00",
+        created_by="user-123",
+        expires_at="2099-04-07T09:00:00+00:00",
+        file_name="summary-report.json",
+        content_type="application/json",
+        content='{"ok": true}',
+    ))
+
+    response = client.get(
+        "/teams/team-123/reports/report-123/download",
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert "summary-report.json" in response.headers["content-disposition"]
+    assert response.text == '{"ok": true}'
+
+
+@patch("app.dependencies.verify_jwt_token")
+@patch('app.dependencies.create_db_client')
 def test_update_check_with_escalation(mock_create_db, mock_verify, client, mock_user, mock_jwt_token):
     """Test updating check with escalation configuration."""
     # Setup mocks
@@ -623,7 +1186,7 @@ def test_update_check_with_escalation(mock_create_db, mock_verify, client, mock_
     }
     mock_db = AsyncMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock user
     mock_db.get_user = AsyncMock(return_value=User(
         user_id=mock_user["user_id"],
@@ -631,7 +1194,7 @@ def test_update_check_with_escalation(mock_create_db, mock_verify, client, mock_
         name=mock_user["name"],
         created_at="2023-01-01T00:00:00Z",
     ))
-    
+
     # Mock team access
     mock_db.get_team_member.return_value = TeamMember(
         user_id=mock_user["user_id"],
@@ -639,7 +1202,7 @@ def test_update_check_with_escalation(mock_create_db, mock_verify, client, mock_
         role=Role.ADMIN,
         joined_at="2023-01-01T00:00:00Z"
     )
-    
+
     # Mock existing check
     mock_check = Check(
         check_id="check-456",
@@ -653,11 +1216,11 @@ def test_update_check_with_escalation(mock_create_db, mock_verify, client, mock_
         alert_channels=[]
     )
     mock_db.get_check.return_value = mock_check
-    
+
     # Mock updated check with escalation
     updated_check = Check(
         check_id="check-456",
-        team_id="team-123", 
+        team_id="team-123",
         name="Test Check",
         token="test-token",
         period_seconds=3600,
@@ -669,7 +1232,7 @@ def test_update_check_with_escalation(mock_create_db, mock_verify, client, mock_
         escalation_alert_channels=["critical-channel-id"]
     )
     mock_db.update_check.return_value = updated_check
-    
+
     # Make request
     response = client.patch(
         "/teams/team-123/checks/check-456",
@@ -679,7 +1242,7 @@ def test_update_check_with_escalation(mock_create_db, mock_verify, client, mock_
         },
         headers={"Authorization": f"Bearer {mock_jwt_token}"}
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["escalationMinutes"] == 15
@@ -699,7 +1262,7 @@ def test_escalate_check_immediately(mock_create_db, mock_verify, client, mock_us
     }
     mock_db = AsyncMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock user
     mock_db.get_user = AsyncMock(return_value=User(
         user_id=mock_user["user_id"],
@@ -707,7 +1270,7 @@ def test_escalate_check_immediately(mock_create_db, mock_verify, client, mock_us
         name=mock_user["name"],
         created_at="2023-01-01T00:00:00Z",
     ))
-    
+
     # Mock team access
     mock_db.get_team_member.return_value = TeamMember(
         user_id=mock_user["user_id"],
@@ -715,7 +1278,7 @@ def test_escalate_check_immediately(mock_create_db, mock_verify, client, mock_us
         role=Role.ADMIN,
         joined_at="2023-01-01T00:00:00Z"
     )
-    
+
     # Mock check with escalation configured
     mock_check = Check(
         check_id="check-456",
@@ -731,13 +1294,13 @@ def test_escalate_check_immediately(mock_create_db, mock_verify, client, mock_us
     )
     mock_db.get_check.return_value = mock_check
     mock_db.get_team.return_value = MagicMock(name="Test Team")
-    
+
     with patch("app.handlers._send_escalated_alerts") as mock_escalate:
         response = client.post(
             "/teams/team-123/checks/check-456/escalate",
             headers={"Authorization": f"Bearer {mock_jwt_token}"}
         )
-    
+
     assert response.status_code == 200
     assert response.json()["message"] == "Escalation triggered successfully"
     mock_db.mark_escalation_triggered.assert_called_once()
@@ -756,7 +1319,7 @@ def test_suppress_check_immediately(mock_create_db, mock_verify, client, mock_us
     }
     mock_db = AsyncMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock user
     mock_db.get_user = AsyncMock(return_value=User(
         user_id=mock_user["user_id"],
@@ -764,7 +1327,7 @@ def test_suppress_check_immediately(mock_create_db, mock_verify, client, mock_us
         name=mock_user["name"],
         created_at="2023-01-01T00:00:00Z",
     ))
-    
+
     # Mock team access
     mock_db.get_team_member.return_value = TeamMember(
         user_id=mock_user["user_id"],
@@ -772,7 +1335,7 @@ def test_suppress_check_immediately(mock_create_db, mock_verify, client, mock_us
         role=Role.ADMIN,
         joined_at="2023-01-01T00:00:00Z"
     )
-    
+
     # Mock check with suppression configured
     mock_check = Check(
         check_id="check-456",
@@ -786,12 +1349,12 @@ def test_suppress_check_immediately(mock_create_db, mock_verify, client, mock_us
         suppress_duration_minutes=120
     )
     mock_db.get_check.return_value = mock_check
-    
+
     response = client.post(
         "/teams/team-123/checks/check-456/suppress",
         headers={"Authorization": f"Bearer {mock_jwt_token}"}
     )
-    
+
     assert response.status_code == 200
     assert "120 minutes" in response.json()["message"]
     mock_db.suppress_check_alerts.assert_called_once()
@@ -810,7 +1373,7 @@ def test_bulk_pause_checks_success(mock_create_db, mock_verify, client, mock_use
     }
     mock_db = AsyncMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock user
     mock_db.get_user = AsyncMock(return_value=User(
         user_id=mock_user["user_id"],
@@ -818,7 +1381,7 @@ def test_bulk_pause_checks_success(mock_create_db, mock_verify, client, mock_use
         name=mock_user["name"],
         created_at="2023-01-01T00:00:00Z",
     ))
-    
+
     # Mock team access with MANAGE permission
     mock_db.get_team_member.return_value = TeamMember(
         user_id=mock_user["user_id"],
@@ -826,21 +1389,21 @@ def test_bulk_pause_checks_success(mock_create_db, mock_verify, client, mock_use
         role=Role.ADMIN,
         joined_at="2023-01-01T00:00:00Z"
     )
-    
+
     # Mock checks exist
     mock_db.get_check.side_effect = [
-        Check(check_id="check-1", team_id="team-123", name="Check 1", token="token-1", 
+        Check(check_id="check-1", team_id="team-123", name="Check 1", token="token-1",
               period_seconds=3600, grace_seconds=300, status=CheckStatus.UP, created_at="2023-01-01T00:00:00Z"),
-        Check(check_id="check-2", team_id="team-123", name="Check 2", token="token-2", 
+        Check(check_id="check-2", team_id="team-123", name="Check 2", token="token-2",
               period_seconds=3600, grace_seconds=300, status=CheckStatus.LATE, created_at="2023-01-01T00:00:00Z")
     ]
-    
+
     response = client.post(
         "/teams/team-123/checks/bulk/pause",
         headers={"Authorization": f"Bearer {mock_jwt_token}"},
         json={"check_ids": ["check-1", "check-2"]}
     )
-    
+
     assert response.status_code == 200
     assert "Paused 2 of 2 checks" in response.json()["message"]
     assert mock_db.update_check_status.call_count == 2
@@ -859,7 +1422,7 @@ def test_bulk_resume_checks_success(mock_create_db, mock_verify, client, mock_us
     }
     mock_db = AsyncMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock user
     mock_db.get_user = AsyncMock(return_value=User(
         user_id=mock_user["user_id"],
@@ -867,7 +1430,7 @@ def test_bulk_resume_checks_success(mock_create_db, mock_verify, client, mock_us
         name=mock_user["name"],
         created_at="2023-01-01T00:00:00Z",
     ))
-    
+
     # Mock team access with MANAGE permission
     mock_db.get_team_member.return_value = TeamMember(
         user_id=mock_user["user_id"],
@@ -875,21 +1438,21 @@ def test_bulk_resume_checks_success(mock_create_db, mock_verify, client, mock_us
         role=Role.ADMIN,
         joined_at="2023-01-01T00:00:00Z"
     )
-    
+
     # Mock paused checks
     mock_db.get_check.side_effect = [
-        Check(check_id="check-1", team_id="team-123", name="Check 1", token="token-1", 
+        Check(check_id="check-1", team_id="team-123", name="Check 1", token="token-1",
               period_seconds=3600, grace_seconds=300, status=CheckStatus.PAUSED, created_at="2023-01-01T00:00:00Z"),
-        Check(check_id="check-2", team_id="team-123", name="Check 2", token="token-2", 
+        Check(check_id="check-2", team_id="team-123", name="Check 2", token="token-2",
               period_seconds=3600, grace_seconds=300, status=CheckStatus.PAUSED, created_at="2023-01-01T00:00:00Z")
     ]
-    
+
     response = client.post(
         "/teams/team-123/checks/bulk/resume",
         headers={"Authorization": f"Bearer {mock_jwt_token}"},
         json={"check_ids": ["check-1", "check-2"]}
     )
-    
+
     assert response.status_code == 200
     assert "Resumed 2 of 2 checks" in response.json()["message"]
     assert mock_db.update_check_status.call_count == 2
@@ -909,7 +1472,7 @@ def test_bulk_pause_checks_insufficient_permission(mock_create_db, mock_verify, 
     }
     mock_db = AsyncMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock user
     mock_db.get_user = AsyncMock(return_value=User(
         user_id=mock_user["user_id"],
@@ -917,7 +1480,7 @@ def test_bulk_pause_checks_insufficient_permission(mock_create_db, mock_verify, 
         name=mock_user["name"],
         created_at="2023-01-01T00:00:00Z",
     ))
-    
+
     # Mock team access with VIEW permission (insufficient for bulk operations)
     mock_db.get_team_member.return_value = TeamMember(
         user_id=mock_user["user_id"],
@@ -925,13 +1488,13 @@ def test_bulk_pause_checks_insufficient_permission(mock_create_db, mock_verify, 
         role=Role.MEMBER,
         joined_at="2023-01-01T00:00:00Z"
     )
-    
+
     response = client.post(
         "/teams/team-123/checks/bulk/pause",
         headers={"Authorization": f"Bearer {mock_jwt_token}"},
         json={"check_ids": ["check-1", "check-2"]}
     )
-    
+
     assert response.status_code == 403
     assert "Insufficient permissions" in response.json()["error"]
 
@@ -949,7 +1512,7 @@ def test_bulk_operations_partial_success(mock_create_db, mock_verify, client, mo
     }
     mock_db = AsyncMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock user
     mock_db.get_user = AsyncMock(return_value=User(
         user_id=mock_user["user_id"],
@@ -957,7 +1520,7 @@ def test_bulk_operations_partial_success(mock_create_db, mock_verify, client, mo
         name=mock_user["name"],
         created_at="2023-01-01T00:00:00Z",
     ))
-    
+
     # Mock team access with MANAGE permission
     mock_db.get_team_member.return_value = TeamMember(
         user_id=mock_user["user_id"],
@@ -965,20 +1528,20 @@ def test_bulk_operations_partial_success(mock_create_db, mock_verify, client, mo
         role=Role.ADMIN,
         joined_at="2023-01-01T00:00:00Z"
     )
-    
+
     # Mock one check exists, one doesn't
     mock_db.get_check.side_effect = [
-        Check(check_id="check-1", team_id="team-123", name="Check 1", token="token-1", 
+        Check(check_id="check-1", team_id="team-123", name="Check 1", token="token-1",
               period_seconds=3600, grace_seconds=300, status=CheckStatus.UP, created_at="2023-01-01T00:00:00Z"),
         None  # Second check doesn't exist
     ]
-    
+
     response = client.post(
         "/teams/team-123/checks/bulk/pause",
         headers={"Authorization": f"Bearer {mock_jwt_token}"},
         json={"check_ids": ["check-1", "check-2"]}
     )
-    
+
     assert response.status_code == 200
     assert "Paused 1 of 2 checks" in response.json()["message"]
     assert mock_db.update_check_status.call_count == 1
@@ -997,7 +1560,7 @@ def test_bulk_operations_empty_check_ids(mock_create_db, mock_verify, client, mo
     }
     mock_db = AsyncMock()
     mock_create_db.return_value = mock_db
-    
+
     # Mock user
     mock_db.get_user = AsyncMock(return_value=User(
         user_id=mock_user["user_id"],
@@ -1005,7 +1568,7 @@ def test_bulk_operations_empty_check_ids(mock_create_db, mock_verify, client, mo
         name=mock_user["name"],
         created_at="2023-01-01T00:00:00Z",
     ))
-    
+
     # Mock team access with MANAGE permission
     mock_db.get_team_member.return_value = TeamMember(
         user_id=mock_user["user_id"],
@@ -1013,12 +1576,12 @@ def test_bulk_operations_empty_check_ids(mock_create_db, mock_verify, client, mo
         role=Role.ADMIN,
         joined_at="2023-01-01T00:00:00Z"
     )
-    
+
     response = client.post(
         "/teams/team-123/checks/bulk/pause",
         headers={"Authorization": f"Bearer {mock_jwt_token}"},
         json={"check_ids": []}
     )
-    
+
     assert response.status_code == 200
     assert "Paused 0 of 0 checks" in response.json()["message"]

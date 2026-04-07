@@ -5,24 +5,24 @@ class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl
   }
-  
+
   async request(path, options = {}) {
     const token = getIdToken()
-    
+
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
     }
-    
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
     }
-    
+
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...options,
       headers,
     })
-    
+
     if (!response.ok) {
       // Auto-logout on 401 (expired/invalid token)
       if (response.status === 401) {
@@ -32,19 +32,19 @@ class ApiClient {
         window.location.href = '/login'
         return
       }
-      
+
       const error = await response.json().catch(() => ({ error: 'Request failed' }))
       throw new Error(error.error || `HTTP ${response.status}`)
     }
-    
+
     return response.json()
   }
-  
+
   // User
   async getMe() {
     return this.request('/me')
   }
-  
+
   // Teams
   async createTeam(name) {
     return this.request('/teams', {
@@ -52,11 +52,11 @@ class ApiClient {
       body: JSON.stringify({ name }),
     })
   }
-  
+
   async listTeams() {
     return this.request('/teams')
   }
-  
+
   async getTeam(teamId) {
     return this.request(`/teams/${teamId}`)
   }
@@ -74,48 +74,48 @@ class ApiClient {
       body: JSON.stringify({ team_name: teamName }),
     })
   }
-  
+
   // Checks
   async listChecks(team_id) {
     return this.request(`/teams/${team_id}/checks`)
   }
-  
+
   async createCheck(team_id, data) {
     return this.request(`/teams/${team_id}/checks`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
-  
+
   async getCheck(team_id, check_id) {
     return this.request(`/teams/${team_id}/checks/${check_id}`)
   }
-  
+
   async updateCheck(team_id, check_id, data) {
     return this.request(`/teams/${team_id}/checks/${check_id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     })
   }
-  
+
   async pauseCheck(team_id, check_id) {
     return this.request(`/teams/${team_id}/checks/${check_id}/pause`, {
       method: 'POST',
     })
   }
-  
+
   async resumeCheck(team_id, check_id) {
     return this.request(`/teams/${team_id}/checks/${check_id}/resume`, {
       method: 'POST',
     })
   }
-  
+
   async rotateCheckToken(team_id, check_id) {
     return this.request(`/teams/${team_id}/checks/${check_id}/rotate-token`, {
       method: 'POST',
     })
   }
-  
+
   async deleteCheck(team_id, check_id) {
     return this.request(`/teams/${team_id}/checks/${check_id}`, {
       method: 'DELETE',
@@ -147,13 +147,105 @@ class ApiClient {
       method: 'POST',
     })
   }
-  
-  async listPings(team_id, check_id, limit = 50, since = null) {
+
+  async listPings(team_id, check_id, limit = 50, since = null, type = null) {
     const params = new URLSearchParams({ limit: limit.toString() })
     if (since) {
       params.append('since', since.toString())
     }
+    if (type) {
+      params.append('type', type)
+    }
     return this.request(`/teams/${team_id}/checks/${check_id}/pings?${params}`)
+  }
+
+  async getCheckStats(team_id, check_id, range = '24h') {
+    const params = new URLSearchParams({ range })
+    return this.request(`/teams/${team_id}/checks/${check_id}/stats?${params}`)
+  }
+
+  async getCheckErrorSummary(team_id, check_id, range = '24h') {
+    const params = new URLSearchParams({ range })
+    return this.request(`/teams/${team_id}/checks/${check_id}/errors/summary?${params}`)
+  }
+
+  async getCheckUptime(team_id, check_id, fromAt, toAt, excludeMaintenance = true) {
+    const params = new URLSearchParams({
+      from: fromAt,
+      to: toAt,
+      exclude_maintenance: excludeMaintenance ? 'true' : 'false',
+    })
+    return this.request(`/teams/${team_id}/checks/${check_id}/uptime?${params}`)
+  }
+
+  async listMaintenanceWindows(teamId, checkId = null) {
+    const params = new URLSearchParams()
+    if (checkId) {
+      params.append('check_id', checkId)
+    }
+    const suffix = params.toString() ? `?${params}` : ''
+    return this.request(`/teams/${teamId}/maintenance${suffix}`)
+  }
+
+  async createMaintenanceWindow(teamId, data) {
+    return this.request(`/teams/${teamId}/maintenance`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteMaintenanceWindow(teamId, windowId) {
+    return this.request(`/teams/${teamId}/maintenance/${windowId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async createReport(teamId, data) {
+    return this.request(`/teams/${teamId}/reports`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listReports(teamId) {
+    return this.request(`/teams/${teamId}/reports`)
+  }
+
+  async getReport(teamId, reportId) {
+    return this.request(`/teams/${teamId}/reports/${reportId}`)
+  }
+
+  async deleteReport(teamId, reportId) {
+    return this.request(`/teams/${teamId}/reports/${reportId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async downloadReport(teamId, reportId) {
+    const token = getIdToken()
+    const headers = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(`${this.baseUrl}/teams/${teamId}/reports/${reportId}/download`, {
+      method: 'GET',
+      headers,
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }))
+      throw new Error(error.error || `HTTP ${response.status}`)
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('Content-Disposition') || ''
+    const filenameMatch = disposition.match(/filename="?([^";]+)"?/)
+    return {
+      blob,
+      filename: filenameMatch ? filenameMatch[1] : `report-${reportId}`,
+      contentType: response.headers.get('Content-Type') || blob.type,
+    }
   }
 
   // Team member management

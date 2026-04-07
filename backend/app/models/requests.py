@@ -100,10 +100,10 @@ class UpdateCheckRequest(BaseModel):
     expected_status_code: Optional[int] = Field(None, ge=100, le=599, alias="expectedStatusCode", description="Expected HTTP status code")
     expected_string: Optional[str] = Field(None, max_length=1000, alias="expectedString", description="Expected string in response body")
     failure_threshold: Optional[int] = Field(None, ge=1, le=100, alias="failureThreshold", description="Alert after N consecutive failures")
-    
+
     # Escalation configuration
     escalation_minutes: Optional[int] = Field(None, ge=1, le=1440, alias="escalationMinutes", description="Minutes before escalating")
-    
+
     # Suppression configuration
     suppress_after_count: Optional[int] = Field(None, ge=1, le=100, alias="suppressAfterCount", description="Suppress after N consecutive alerts")
     suppress_duration_minutes: Optional[int] = Field(None, ge=1, le=10080, alias="suppressDurationMinutes", description="Suppress for N minutes")
@@ -173,6 +173,87 @@ class CreateAlertTopicRequest(BaseModel):
         return v.strip()
 
 
+class CreateMaintenanceWindowRequest(BaseModel):
+    """Request to create a maintenance window."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    check_id: Optional[str] = Field(None, alias="checkId")
+    start_at: str = Field(..., alias="startAt")
+    end_at: str = Field(..., alias="endAt")
+    label: Optional[str] = Field(None, max_length=200)
+
+    @field_validator("check_id")
+    @classmethod
+    def normalize_check_id(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("label")
+    @classmethod
+    def normalize_label(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @model_validator(mode='after')
+    def validate_range(self):
+        from ..utils import parse_iso_timestamp
+
+        start_at = parse_iso_timestamp(self.start_at)
+        end_at = parse_iso_timestamp(self.end_at)
+        if end_at <= start_at:
+            raise ValueError("endAt must be after startAt")
+        return self
+
+
+class CreateReportRequest(BaseModel):
+    """Request to generate a downloadable report."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    check_id: Optional[str] = Field(None, alias="checkId")
+    report_type: str = Field(..., alias="reportType")
+    format: str
+    from_date: str = Field(..., alias="from")
+    to_date: str = Field(..., alias="to")
+
+    @field_validator("check_id")
+    @classmethod
+    def normalize_report_check_id(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("report_type")
+    @classmethod
+    def validate_report_type(cls, value: str) -> str:
+        if value not in {"uptime", "errors", "performance", "summary"}:
+            raise ValueError("reportType must be one of: uptime, errors, performance, summary")
+        return value
+
+    @field_validator("format")
+    @classmethod
+    def validate_report_format(cls, value: str) -> str:
+        if value not in {"json", "csv"}:
+            raise ValueError("format must be one of: json, csv")
+        return value
+
+    @model_validator(mode='after')
+    def validate_report_range(self):
+        from ..utils import parse_iso_timestamp
+
+        from_at = parse_iso_timestamp(self.from_date)
+        to_at = parse_iso_timestamp(self.to_date)
+        if to_at <= from_at:
+            raise ValueError("to must be after from")
+        return self
+
+
 class SubscribeAlertTopicRequest(BaseModel):
     """Request to subscribe to an alert topic."""
 
@@ -192,7 +273,7 @@ class SubscribeAlertTopicRequest(BaseModel):
     def validate_endpoint(cls, v: str, info) -> str:
         """Validate endpoint based on protocol."""
         protocol = info.data.get("protocol", "").lower()
-        
+
         if protocol == "email":
             # Basic email validation
             if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', v):
@@ -205,5 +286,5 @@ class SubscribeAlertTopicRequest(BaseModel):
             # Basic phone number validation (E.164 format)
             if not re.match(r'^\+[1-9]\d{1,14}$', v):
                 raise ValueError("Invalid phone number format (use E.164 format: +1234567890)")
-        
+
         return v

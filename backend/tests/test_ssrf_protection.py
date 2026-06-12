@@ -9,13 +9,13 @@ class TestSSRFProtection:
 
     def test_valid_external_https_url(self):
         """Valid HTTPS URLs to external services should pass."""
-        url = "https://webhook.example.com/alert"
+        url = "https://93.184.216.34/alert"
         is_valid, error = validate_webhook_url(url)
         assert is_valid, f"Valid external URL should pass: {error}"
 
     def test_valid_external_http_url(self):
         """Valid HTTP URLs to external services should pass."""
-        url = "http://webhook.example.com/alert"
+        url = "http://93.184.216.34/alert"
         is_valid, error = validate_webhook_url(url)
         assert is_valid, f"Valid external URL should pass: {error}"
 
@@ -128,13 +128,13 @@ class TestSSRFProtection:
 
     def test_valid_external_subdomain(self):
         """Valid external URLs with subdomains should pass."""
-        url = "https://api.example.com/v1/webhook"
+        url = "https://93.184.216.34/v1/webhook"
         is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_valid_external_with_port(self):
         """Valid external URLs with ports should pass."""
-        url = "https://webhook.example.com:9000/alert"
+        url = "https://93.184.216.34:9000/alert"
         is_valid, error = validate_webhook_url(url)
         assert is_valid
 
@@ -152,7 +152,7 @@ class TestSSRFProtection:
 
     def test_assert_webhook_url_safe_valid(self):
         """assert_webhook_url_safe should not raise for valid URLs."""
-        url = "https://webhook.example.com/alert"
+        url = "https://93.184.216.34/alert"
         # Should not raise
         assert_webhook_url_safe(url)
 
@@ -183,13 +183,13 @@ class TestSSRFProtection:
 
     def test_valid_url_with_query_params(self):
         """Valid URLs with query parameters should pass."""
-        url = "https://webhook.example.com/alert?token=abc123&version=v1"
+        url = "https://93.184.216.34/alert?token=abc123&version=v1"
         is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_valid_url_with_fragment(self):
         """Valid URLs with fragments should pass."""
-        url = "https://webhook.example.com/alert#section"
+        url = "https://93.184.216.34/alert#section"
         is_valid, error = validate_webhook_url(url)
         assert is_valid
 
@@ -212,13 +212,13 @@ class TestSSRFProtection:
 
     def test_very_long_url(self):
         """Very long but valid URLs should pass."""
-        url = "https://webhook.example.com/" + "a" * 2000
+        url = "https://93.184.216.34/" + "a" * 2000
         is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_url_with_userinfo(self):
         """URLs with userinfo should still be validated correctly."""
-        url = "https://user:pass@webhook.example.com/webhook"
+        url = "https://user:pass@93.184.216.34/webhook"
         is_valid, error = validate_webhook_url(url)
         assert is_valid
 

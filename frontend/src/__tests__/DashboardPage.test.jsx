@@ -99,16 +99,13 @@ describe('DashboardPage', () => {
   });
 
   test('handles API error when loading teams', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     api.listTeams.mockRejectedValue(new Error('API Error'));
     
     renderWithRouter(<DashboardPage user={mockUser} />);
     
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to load teams:', expect.any(Error));
+      expect(screen.getByText('Failed to load teams. Please try again.')).toBeInTheDocument();
     });
-    
-    consoleSpy.mockRestore();
   });
 
   test('opens create team form when New Team button clicked', async () => {

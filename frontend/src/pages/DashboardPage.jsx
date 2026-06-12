@@ -26,8 +26,7 @@ export default function DashboardPage({ user, onLogout }) {
       // Backend returns array directly, not wrapped in {teams: [...]}
       setTeams(Array.isArray(data) ? data : data.teams || [])
       setError(null)
-    } catch (error) {
-      console.error('Failed to load teams:', error)
+    } catch {
       setError('Failed to load teams. Please try again.')
     } finally {
       setLoading(false)

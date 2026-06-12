@@ -1,5 +1,4 @@
 """FastAPI dependencies for auth and database access."""
-import asyncio
 import hashlib
 from datetime import datetime, timezone
 from typing import Annotated
@@ -30,18 +29,19 @@ async def _resolve_api_token(token: str, db: DatabaseInterface) -> CurrentUser:
         docs = col.where("token_hash", "==", token_hash)
         async for doc in docs.stream():
             data = doc.to_dict()
-            # Async fire-and-forget update of last_used_at
-            asyncio.ensure_future(
-                col.document(data["token_id"]).update(
+            try:
+                await col.document(data["token_id"]).update(
                     {"last_used_at": datetime.now(timezone.utc).isoformat()}
                 )
-            )
+            except Exception:
+                # Usage tracking is best-effort; auth should still succeed.
+                pass
             return CurrentUser(
                 user_id=data["user_id"],
                 email="",
                 name=data.get("name", ""),
             )
-    except Exception:
+    except KeyError:
         pass
     raise UnauthorizedError("Invalid API token")
 
@@ -60,30 +60,23 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return await _resolve_api_token(raw, db)
 
     try:
-        print(f"DEBUG: Received token: {raw[:50]}...")
-        
         # Verify JWT token
         claims = await verify_jwt_token(raw)
-        print(f"DEBUG: JWT claims: {claims}")
-        
         # Extract user info
         user_id, email, name, email_verified = extract_user_info(claims)
-        print(f"DEBUG: Extracted user info - ID: {user_id}, Email: {email}, Name: {name}")
-        
         # Check domain allowlist
         if not check_domain_allowed(email):
             raise ForbiddenError("Email domain not allowed")
-        
+
         return CurrentUser(user_id=user_id, email=email, name=name)
-        
+
     except InvalidTokenError as e:
-        print(f"DEBUG: InvalidTokenError: {str(e)}")
         raise UnauthorizedError(f"Invalid token: {str(e)}")
     except ValueError as e:
-        print(f"DEBUG: ValueError: {str(e)}")
         raise UnauthorizedError(f"Token validation error: {str(e)}")
-    except Exception as e:
-        print(f"DEBUG: Unexpected error: {str(e)}")
+    except (UnauthorizedError, ForbiddenError):
+        raise
+    except Exception:
         raise UnauthorizedError("Authentication failed")
 
 def get_db() -> DatabaseInterface:

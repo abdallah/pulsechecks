@@ -115,6 +115,21 @@ curl -X POST https://api.pulsechecks.example.com/ping/abc123def456 \
   -d '{"status": "Backup completed: 1.2GB"}'
 ```
 
+## Containerized testing
+
+Run backend and frontend tests in isolated Docker containers:
+
+```bash
+./scripts/test-docker.sh
+```
+
+Or run each suite explicitly:
+
+```bash
+docker compose -f docker-compose.test.yml run --rm backend-tests
+docker compose -f docker-compose.test.yml run --rm frontend-tests
+```
+
 ## Development
 
 ```bash

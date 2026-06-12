@@ -138,8 +138,7 @@ export default function CheckDetailPage({ user, onLogout }) {
       setCheck(checkData)
       // Backend returns array directly, not wrapped in {pings: [...]}
       setPings(Array.isArray(pingsData) ? pingsData : pingsData.pings || [])
-    } catch (error) {
-      console.error('Failed to load check:', error)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -150,8 +149,7 @@ export default function CheckDetailPage({ user, onLogout }) {
     try {
       const statsData = await api.getCheckStats(teamId, checkId, range)
       setStats(statsData)
-    } catch (error) {
-      console.error('Failed to load check stats:', error)
+    } catch {
       setStats(null)
     } finally {
       setStatsLoading(false)
@@ -163,8 +161,7 @@ export default function CheckDetailPage({ user, onLogout }) {
     try {
       const errorData = await api.getCheckErrorSummary(teamId, checkId, range)
       setErrorSummary(errorData)
-    } catch (error) {
-      console.error('Failed to load check error summary:', error)
+    } catch {
       setErrorSummary(null)
     } finally {
       setErrorsLoading(false)
@@ -182,8 +179,7 @@ export default function CheckDetailPage({ user, onLogout }) {
         exclude,
       )
       setUptimeReport(uptimeData)
-    } catch (error) {
-      console.error('Failed to load uptime report:', error)
+    } catch {
       setUptimeReport(null)
     } finally {
       setUptimeLoading(false)
@@ -195,8 +191,7 @@ export default function CheckDetailPage({ user, onLogout }) {
     try {
       const windows = await api.listMaintenanceWindows(teamId, checkId)
       setMaintenanceWindows(Array.isArray(windows) ? windows : [])
-    } catch (error) {
-      console.error('Failed to load maintenance windows:', error)
+    } catch {
       setMaintenanceWindows([])
     } finally {
       setMaintenanceLoading(false)
@@ -247,8 +242,7 @@ export default function CheckDetailPage({ user, onLogout }) {
     try {
       const channels = await api.listAlertChannels(teamId)
       setAvailableTopics(Array.isArray(channels) ? channels : [])
-    } catch (error) {
-      console.error('Failed to load alert topics:', error)
+    } catch {
     }
   }
 
@@ -280,8 +274,8 @@ export default function CheckDetailPage({ user, onLogout }) {
               })
             }
           }
-        } catch (error) {
-          console.error(`Failed to load channels for team ${team.teamId}:`, error)
+        } catch {
+          continue
         }
       }
 
@@ -292,8 +286,7 @@ export default function CheckDetailPage({ user, onLogout }) {
       ]
 
       setAvailableChannels(allChannels)
-    } catch (error) {
-      console.error('Failed to load alert channels:', error)
+    } catch {
     }
   }
 

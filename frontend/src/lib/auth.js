@@ -70,19 +70,15 @@ async function cognitoHandleCallback() {
   }
 
   const savedState = sessionStorage.getItem('oauth_state')
-  console.log('State verification:', { received: state, saved: savedState })
 
   if (!savedState) {
-    console.warn('No saved state found in sessionStorage')
   } else if (state !== savedState) {
-    console.error('State mismatch:', { received: state, saved: savedState })
     throw new Error('Invalid state parameter')
   }
 
   const codeVerifier = sessionStorage.getItem('pkce_code_verifier')
 
   if (!codeVerifier) {
-    console.error('No code verifier found in sessionStorage')
     throw new Error('Authentication session expired. Please try logging in again.')
   }
 
@@ -94,9 +90,6 @@ async function cognitoHandleCallback() {
     code_verifier: codeVerifier,
   })
 
-  console.log('Token exchange params:', Object.fromEntries(tokenParams))
-  console.log('Code verifier from storage:', codeVerifier)
-
   const response = await fetch(`${config.cognitoDomain}/oauth2/token`, {
     method: 'POST',
     headers: {
@@ -107,8 +100,7 @@ async function cognitoHandleCallback() {
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('Token exchange failed:', response.status, errorText)
-    throw new Error(`Failed to exchange code for tokens: ${response.status} ${errorText}`)
+    throw new Error(errorText || 'Failed to exchange code for tokens')
   }
 
   const tokens = await response.json()

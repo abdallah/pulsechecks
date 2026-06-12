@@ -91,14 +91,14 @@ def validate_webhook_url(url: str) -> Tuple[bool, str]:
                 if _is_ip_blocked(ip):
                     return False, f"Webhook URL resolves to blocked IP address: {ip_str}"
             except socket.gaierror:
-                # DNS resolution failed - this is okay, might be an external service
-                pass
+                # DNS resolution failed - fail closed for security-sensitive webhook validation.
+                return False, f"Unable to resolve hostname safely: {hostname}"
             except Exception as e:
-                # Other resolution errors - log and allow (better to send failed request than block legitimate URL)
-                return True, ""
+                # Any unexpected resolution error is treated as unsafe.
+                return False, f"Unable to validate hostname safely: {hostname}"
         except Exception:
-            # If we can't resolve, allow it to proceed (will fail at HTTP request time)
-            pass
+            # If hostname resolution unexpectedly fails, fail closed.
+            return False, f"Unable to validate hostname safely: {hostname}"
     
     return True, ""
 

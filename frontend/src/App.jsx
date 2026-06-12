@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { isAuthenticated, setTokens, clearTokens, getAccessToken } from './lib/auth'
+import { isAuthenticated, setTokens, clearTokens } from './lib/auth'
 import { api } from './lib/api'
 import LoginPage from './pages/LoginPage'
 import CallbackPage from './pages/CallbackPage'
@@ -10,12 +10,27 @@ import CheckDetailPage from './pages/CheckDetailPage'
 import TeamSettingsPage from './pages/TeamSettingsPage'
 import SharedAlertsPage from './pages/SharedAlertsPage'
 import AlertChannelsPage from './pages/AlertChannelsPage'
-import { ToastProvider } from './components/Toast'
+import { ToastProvider, useToast } from './components/Toast'
 
-function App() {
+function AppShell() {
+  const toast = useToast()
   const [authenticated, setAuthenticated] = useState(isAuthenticated())
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  
+  useEffect(() => {
+    const handleAuthExpired = (event) => {
+      const message = event?.detail?.message || 'Your session expired. Please sign in again.'
+      clearTokens()
+      setUser(null)
+      setAuthenticated(false)
+      setLoading(false)
+      toast.error(message)
+    }
+
+    window.addEventListener('pulsechecks:auth-expired', handleAuthExpired)
+    return () => window.removeEventListener('pulsechecks:auth-expired', handleAuthExpired)
+  }, [toast])
   
   useEffect(() => {
     if (authenticated) {
@@ -27,15 +42,12 @@ function App() {
   
   async function loadUser() {
     try {
-      console.log('Loading user with token:', getAccessToken()?.substring(0, 20) + '...')
       const userData = await api.getMe()
-      console.log('User loaded successfully:', userData)
       setUser(userData)
-    } catch (error) {
-      console.error('Failed to load user:', error)
-      console.log('Clearing tokens and redirecting to login')
+    } catch {
       clearTokens()
       setAuthenticated(false)
+      setUser(null)
     } finally {
       setLoading(false)
     }
@@ -61,26 +73,32 @@ function App() {
   }
   
   return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+        <Route path="/callback" element={<CallbackPage onLogin={handleLogin} />} />
+        
+        {authenticated ? (
+          <>
+            <Route path="/" element={<DashboardPage user={user} onLogout={handleLogout} />} />
+            <Route path="/shared-alerts" element={<SharedAlertsPage user={user} onLogout={handleLogout} />} />
+            <Route path="/teams/:teamId/checks" element={<ChecksPage user={user} onLogout={handleLogout} />} />
+            <Route path="/teams/:teamId/checks/:checkId" element={<CheckDetailPage user={user} onLogout={handleLogout} />} />
+            <Route path="/teams/:teamId/settings" element={<TeamSettingsPage user={user} onLogout={handleLogout} />} />
+            <Route path="/teams/:teamId/channels" element={<AlertChannelsPage user={user} onLogout={handleLogout} />} />
+          </>
+        ) : (
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        )}
+      </Routes>
+    </BrowserRouter>
+  )
+}
+
+function App() {
+  return (
     <ToastProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
-          <Route path="/callback" element={<CallbackPage onLogin={handleLogin} />} />
-          
-          {authenticated ? (
-            <>
-              <Route path="/" element={<DashboardPage user={user} onLogout={handleLogout} />} />
-              <Route path="/shared-alerts" element={<SharedAlertsPage user={user} onLogout={handleLogout} />} />
-              <Route path="/teams/:teamId/checks" element={<ChecksPage user={user} onLogout={handleLogout} />} />
-              <Route path="/teams/:teamId/checks/:checkId" element={<CheckDetailPage user={user} onLogout={handleLogout} />} />
-              <Route path="/teams/:teamId/settings" element={<TeamSettingsPage user={user} onLogout={handleLogout} />} />
-              <Route path="/teams/:teamId/channels" element={<AlertChannelsPage user={user} onLogout={handleLogout} />} />
-            </>
-          ) : (
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          )}
-        </Routes>
-      </BrowserRouter>
+      <AppShell />
     </ToastProvider>
   )
 }

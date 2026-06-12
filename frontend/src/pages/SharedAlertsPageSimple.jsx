@@ -1,7 +1,6 @@
 import Layout from '../components/Layout'
 
 export default function SharedAlertsPageSimple({ user, onLogout }) {
-  console.log('SharedAlertsPageSimple component loaded')
   
   return (
     <Layout user={user} onLogout={onLogout}>

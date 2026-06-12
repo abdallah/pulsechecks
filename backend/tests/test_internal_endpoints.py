@@ -268,7 +268,7 @@ class TestInternalLateDetectionEndpoint:
         assert response.status_code == 401
 
     def test_debug_mode_skips_validation(self, client, test_keys, monkeypatch):
-        """Test that debug mode skips OIDC validation."""
+        """Test that debug mode still requires auth."""
         monkeypatch.setenv("DEBUG", "true")
 
         with patch('app.routers.internal._late_detector_impl', new_callable=AsyncMock) as mock_detector:
@@ -276,11 +276,10 @@ class TestInternalLateDetectionEndpoint:
 
             response = client.post(
                 "/internal/late-detection",
-                headers={}  # No Authorization header needed
+                headers={}  # No Authorization header provided
             )
 
-        # Should get 200 or error from late detector, not 401 from validation
-        assert response.status_code != 401
+        assert response.status_code == 401
 
     def test_debug_mode_with_1_value(self, client, test_keys, monkeypatch):
         """Test debug mode with DEBUG=1."""
@@ -294,7 +293,7 @@ class TestInternalLateDetectionEndpoint:
                 headers={}
             )
 
-        assert response.status_code != 401
+        assert response.status_code == 401
 
 
 class TestInternalHttpPollEndpoint:
@@ -413,7 +412,7 @@ class TestInternalHttpPollEndpoint:
         assert response.status_code == 403
 
     def test_debug_mode_skips_validation(self, client, test_keys, monkeypatch):
-        """Test that debug mode skips OIDC validation for http-poll."""
+        """Test that debug mode still requires auth for http-poll."""
         monkeypatch.setenv("DEBUG", "true")
 
         with patch('app.routers.internal.poll_http_checks', new_callable=AsyncMock) as mock_poll:
@@ -421,11 +420,10 @@ class TestInternalHttpPollEndpoint:
 
             response = client.post(
                 "/internal/http-poll",
-                headers={}  # No Authorization header needed
+                headers={}  # No Authorization header provided
             )
 
-        # Should not return 401 due to missing auth in debug mode
-        assert response.status_code != 401
+        assert response.status_code == 401
 
 
 class TestInternalEndpointErrorHandling:

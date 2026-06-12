@@ -34,15 +34,10 @@ async def _verify_oidc(request: Request):
 
     Raises HTTPException with appropriate 401/403 status codes.
     """
-    # Skip OIDC validation in debug mode (local development)
-    if os.getenv("DEBUG", "").lower() in ("1", "true"):
-        logger.info("Skipping OIDC validation in debug mode")
-        return
-
-    # Extract Bearer token from Authorization header
+    # Internal endpoints must fail closed; DEBUG should never bypass auth.
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
-        logger.warning("Missing or invalid Authorization header")
+        logger.warning("Missing or invalid Authorization header on internal endpoint")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid Authorization header. Expected 'Bearer <token>'"
@@ -56,7 +51,7 @@ async def _verify_oidc(request: Request):
             service_url = get_cloud_run_url(request)
             expected_audience = [service_url, str(request.url).rstrip("/")]
         except ValueError as e:
-            logger.error(f"Cannot determine Cloud Run URL: {e}")
+            logger.error("Cannot determine Cloud Run URL: %s", e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Server configuration error"
@@ -72,40 +67,40 @@ async def _verify_oidc(request: Request):
             expected_service_account=expected_service_account,
         )
 
-        logger.info(f"OIDC token validated successfully for service account: {claims.get('email')}")
+        logger.info("OIDC token validated successfully for internal scheduler call")
 
     except InvalidTokenSignatureError as e:
-        logger.warning(f"Invalid token signature: {e}")
+        logger.warning("Invalid token signature on internal endpoint: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token signature"
         )
     except TokenExpiredError as e:
-        logger.warning(f"Token expired: {e}")
+        logger.warning("Expired token on internal endpoint: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired"
         )
     except InvalidAudienceError as e:
-        logger.warning(f"Invalid token audience: {e}")
+        logger.warning("Invalid token audience on internal endpoint: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token audience does not match service"
         )
     except InvalidIssuerError as e:
-        logger.warning(f"Invalid token issuer: {e}")
+        logger.warning("Invalid token issuer on internal endpoint: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token issuer is not Google Cloud"
         )
     except InvalidServiceAccountError as e:
-        logger.warning(f"Service account mismatch: {e}")
+        logger.warning("Service account mismatch on internal endpoint: %s", e)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Service account not authorized"
         )
     except OIDCValidationError as e:
-        logger.error(f"OIDC validation error: {e}")
+        logger.error("OIDC validation error on internal endpoint: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token validation failed"

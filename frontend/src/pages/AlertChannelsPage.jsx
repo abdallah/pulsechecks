@@ -49,8 +49,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
     try {
       const data = await api.listAlertChannels(teamId)
       setChannels(data)
-    } catch (error) {
-      console.error('Failed to load alert channels:', error)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -72,7 +71,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
       setShowCreateChannel(false)
       loadChannels()
     } catch (error) {
-      alert('Failed to create channel: ' + error.message)
+      toast.error('Failed to create channel: ' + error.message)
     }
   }
 
@@ -83,7 +82,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
       await api.deleteAlertChannel(teamId, channelId)
       loadChannels()
     } catch (error) {
-      alert('Failed to delete channel: ' + error.message)
+      toast.error('Failed to delete channel: ' + error.message)
     }
   }
 

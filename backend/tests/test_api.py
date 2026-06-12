@@ -681,10 +681,12 @@ def test_list_check_pings_check_not_found(mock_create_db, mock_verify, client, m
     assert data["error"] == "Check not found"
 
 
-@patch("app.dependencies.verify_jwt_token")
 @patch('app.dependencies.create_db_client')
-def test_get_check_stats(mock_create_db, mock_verify, client, mock_jwt_token):
+@patch("app.dependencies.verify_jwt_token")
+def test_get_check_stats(mock_verify, mock_create_db, client, mock_jwt_token):
     """Test aggregated stats for an HTTP check."""
+    from datetime import datetime, timezone, timedelta
+
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
@@ -712,27 +714,28 @@ def test_get_check_stats(mock_create_db, mock_verify, client, mock_jwt_token):
         url="https://example.com/health",
     ))
 
+    now = datetime.now(timezone.utc)
     from app.models import Ping
     mock_db.list_check_pings = AsyncMock(return_value=[
         Ping(
             check_id="check-123",
-            timestamp="2026-04-07T08:00:00+00:00",
-            received_at="2026-04-07T08:00:00+00:00",
+            timestamp=(now - timedelta(minutes=20)).isoformat(),
+            received_at=(now - timedelta(minutes=20)).isoformat(),
             ping_type="success",
             response_time_ms=120,
         ),
         Ping(
             check_id="check-123",
-            timestamp="2026-04-07T08:10:00+00:00",
-            received_at="2026-04-07T08:10:00+00:00",
+            timestamp=(now - timedelta(minutes=10)).isoformat(),
+            received_at=(now - timedelta(minutes=10)).isoformat(),
             ping_type="fail",
             code="503",
             response_time_ms=450,
         ),
         Ping(
             check_id="check-123",
-            timestamp="2026-04-07T08:20:00+00:00",
-            received_at="2026-04-07T08:20:00+00:00",
+            timestamp=(now - timedelta(minutes=2)).isoformat(),
+            received_at=(now - timedelta(minutes=2)).isoformat(),
             ping_type="success",
             response_time_ms=180,
         ),
@@ -755,10 +758,12 @@ def test_get_check_stats(mock_create_db, mock_verify, client, mock_jwt_token):
     assert data["responseTimeSeries"][0]["responseTimeMs"] == 120
 
 
-@patch("app.dependencies.verify_jwt_token")
 @patch('app.dependencies.create_db_client')
-def test_get_check_error_summary(mock_create_db, mock_verify, client, mock_jwt_token):
+@patch("app.dependencies.verify_jwt_token")
+def test_get_check_error_summary(mock_verify, mock_create_db, client, mock_jwt_token):
     """Test aggregated error summary for a check."""
+    from datetime import datetime, timezone, timedelta
+
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
@@ -786,19 +791,20 @@ def test_get_check_error_summary(mock_create_db, mock_verify, client, mock_jwt_t
         url="https://example.com/health",
     ))
 
+    now = datetime.now(timezone.utc)
     from app.models import Ping
     mock_db.list_check_pings = AsyncMock(return_value=[
         Ping(
             check_id="check-123",
-            timestamp="2026-04-07T08:00:00+00:00",
-            received_at="2026-04-07T08:00:00+00:00",
+            timestamp=(now - timedelta(minutes=20)).isoformat(),
+            received_at=(now - timedelta(minutes=20)).isoformat(),
             ping_type="success",
             response_time_ms=120,
         ),
         Ping(
             check_id="check-123",
-            timestamp="2026-04-07T08:05:00+00:00",
-            received_at="2026-04-07T08:05:00+00:00",
+            timestamp=(now - timedelta(minutes=15)).isoformat(),
+            received_at=(now - timedelta(minutes=15)).isoformat(),
             ping_type="fail",
             code="503",
             data="service unavailable",
@@ -806,8 +812,8 @@ def test_get_check_error_summary(mock_create_db, mock_verify, client, mock_jwt_t
         ),
         Ping(
             check_id="check-123",
-            timestamp="2026-04-07T08:10:00+00:00",
-            received_at="2026-04-07T08:10:00+00:00",
+            timestamp=(now - timedelta(minutes=10)).isoformat(),
+            received_at=(now - timedelta(minutes=10)).isoformat(),
             ping_type="fail",
             code="503",
             data="still unavailable",
@@ -815,15 +821,15 @@ def test_get_check_error_summary(mock_create_db, mock_verify, client, mock_jwt_t
         ),
         Ping(
             check_id="check-123",
-            timestamp="2026-04-07T08:15:00+00:00",
-            received_at="2026-04-07T08:15:00+00:00",
+            timestamp=(now - timedelta(minutes=5)).isoformat(),
+            received_at=(now - timedelta(minutes=5)).isoformat(),
             ping_type="success",
             response_time_ms=140,
         ),
         Ping(
             check_id="check-123",
-            timestamp="2026-04-07T08:20:00+00:00",
-            received_at="2026-04-07T08:20:00+00:00",
+            timestamp=(now - timedelta(minutes=1)).isoformat(),
+            received_at=(now - timedelta(minutes=1)).isoformat(),
             ping_type="fail",
             code="timeout",
             data="request timed out",
@@ -841,7 +847,7 @@ def test_get_check_error_summary(mock_create_db, mock_verify, client, mock_jwt_t
     assert data["period"] == "24h"
     assert data["totalFailures"] == 3
     assert data["mostCommonCode"] == "503"
-    assert data["lastFailureAt"] == "2026-04-07T08:20:00+00:00"
+    assert data["lastFailureAt"] == (now - timedelta(minutes=1)).isoformat()
     assert data["longestIncident"]["failureCount"] == 2
     assert data["longestIncident"]["durationSeconds"] == 300
     assert data["failureCodes"][0] == {"code": "503", "count": 2}

@@ -1,0 +1,22 @@
+services:
+  backend-tests:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    environment:
+      CLOUD_PROVIDER: aws
+      ENVIRONMENT: test
+      DEBUG: "false"
+      AWS_REGION: us-east-1
+      DYNAMODB_TABLE: Pulsechecks-Test
+      COGNITO_USER_POOL_ID: us-east-1_TEST123456
+      COGNITO_CLIENT_ID: test-client-id-12345
+      ALLOWED_EMAIL_DOMAINS: example.com
+      SES_FROM_EMAIL: noreply@example.com
+
+  frontend-tests:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
+    environment:
+      CI: "true"

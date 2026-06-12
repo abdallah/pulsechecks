@@ -1,6 +1,6 @@
 """Tests for Mattermost integration."""
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import Mock, patch
 from app.integrations.mattermost import MattermostClient, create_mattermost_client
 from app.models import Check, CheckStatus
 
@@ -74,10 +74,10 @@ class TestMattermostClient:
         client = MattermostClient("https://chat.example.com/hooks/abc123")
         
         with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
+            mock_response = Mock()
             mock_response.raise_for_status.return_value = None
             mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
-            
+
             result = await client.send_late_alert(sample_check, "Test Team")
             
             assert result is True
@@ -101,10 +101,10 @@ class TestMattermostClient:
         client = MattermostClient("https://chat.example.com/hooks/abc123")
         
         with patch("httpx.AsyncClient") as mock_client:
-            mock_response = AsyncMock()
+            mock_response = Mock()
             mock_response.raise_for_status.return_value = None
             mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
-            
+
             result = await client.send_recovery_alert(sample_check, "Test Team")
             
             assert result is True

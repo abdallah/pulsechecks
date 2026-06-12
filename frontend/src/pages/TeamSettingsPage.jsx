@@ -84,8 +84,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       const teamData = await api.getTeam(teamId)
       setTeam(teamData)
-    } catch (error) {
-      console.error('Failed to load team:', error)
+    } catch {
     }
   }
 
@@ -93,8 +92,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       const data = await api.listTeamMembers(teamId)
       setMembers(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Failed to load members:', error)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -103,10 +101,8 @@ export default function TeamSettingsPage({ user, onLogout }) {
   async function loadAlerts() {
     try {
       const data = await api.listAlertChannels(teamId)
-      console.log('Alerts data:', data) // Debug log
       setAlerts(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Failed to load alerts:', error)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -153,8 +149,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       const data = await api.getTeamMattermostWebhook(teamId)
       setMattermostWebhook(data.webhook_url || '')
-    } catch (error) {
-      console.error('Failed to load Mattermost webhook:', error)
+    } catch {
     }
   }
 
@@ -174,8 +169,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       const data = await api.getTeamMattermostWebhooks(teamId)
       setMattermostWebhooks(data.webhooks || [])
-    } catch (error) {
-      console.error('Failed to load Mattermost webhooks:', error)
+    } catch {
     }
   }
 
@@ -240,10 +234,8 @@ export default function TeamSettingsPage({ user, onLogout }) {
   async function loadChannels() {
     try {
       const data = await api.listAlertChannels(teamId)
-      console.log('Alert channels loaded:', data)
       setChannels(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Failed to load alert channels:', error)
+    } catch {
     }
   }
 
@@ -251,8 +243,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       const data = await api.listApiTokens(teamId)
       setApiTokens(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Failed to load API tokens:', error)
+    } catch {
     }
   }
 
@@ -260,8 +251,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       const data = await api.listReports(teamId)
       setReports(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Failed to load reports:', error)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -271,8 +261,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       const data = await api.listChecks(teamId)
       setReportChecks(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Failed to load checks for reports:', error)
+    } catch {
       setReportChecks([])
     }
   }
@@ -554,14 +543,12 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       const topicArn = topic.topicArn || topic.topic_arn
       if (!topicArn) {
-        console.error('No topic ARN found:', topic)
-        alert('Error: Topic ARN not found')
+        alert('Topic ARN not found.')
         return
       }
       const details = await api.getAlertTopicDetails(teamId, topicArn)
       setTopicDetails(details)
-    } catch (error) {
-      console.error('Failed to load topic details:', error)
+    } catch {
       setTopicDetails(null)
     }
   }

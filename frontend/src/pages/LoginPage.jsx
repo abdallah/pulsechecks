@@ -18,7 +18,6 @@ export default function LoginPage({ onLogin = () => {} }) {
         navigate('/', { replace: true })
       }
     } catch (error) {
-      console.error('Login failed:', error)
       setLoginError(error?.message || 'Sign in failed')
     }
   }
@@ -35,8 +34,8 @@ export default function LoginPage({ onLogin = () => {} }) {
           onLogin(tokens)
           navigate('/', { replace: true })
         }
-      } catch (error) {
-        console.error('Firebase redirect processing failed:', error)
+      } catch {
+        setLoginError('We could not complete sign in. Please try again.')
       }
     }
 

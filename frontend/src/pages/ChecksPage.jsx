@@ -56,8 +56,7 @@ export default function ChecksPage({ user, onLogout }) {
     try {
       const teamData = await api.getTeam(teamId)
       setTeam(teamData)
-    } catch (error) {
-      console.error('Failed to load team:', error)
+    } catch {
     }
   }
   
@@ -67,8 +66,7 @@ export default function ChecksPage({ user, onLogout }) {
       // Backend returns array directly, not wrapped in {checks: [...]}
       setChecks(Array.isArray(data) ? data : data.checks || [])
       setError(null)
-    } catch (error) {
-      console.error('Failed to load checks:', error)
+    } catch {
       setError('Failed to load checks. Please try again.')
     } finally {
       setLoading(false)
@@ -103,8 +101,8 @@ export default function ChecksPage({ user, onLogout }) {
               })
             }
           }
-        } catch (error) {
-          console.error(`Failed to load channels for team ${team.teamId}:`, error)
+        } catch {
+          continue
         }
       }
       
@@ -115,8 +113,7 @@ export default function ChecksPage({ user, onLogout }) {
       ]
       
       setAvailableChannels(allChannels)
-    } catch (error) {
-      console.error('Failed to load alert channels:', error)
+    } catch {
     }
   }
 

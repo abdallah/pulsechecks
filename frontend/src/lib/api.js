@@ -1,9 +1,32 @@
 import { config } from '../config'
-import { getIdToken, logout, clearTokens } from './auth'
+import { getIdToken, clearTokens } from './auth'
 
 class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl
+  }
+
+  async readErrorMessage(response, fallbackMessage) {
+    const contentType = response.headers.get('Content-Type') || ''
+    const bodyText = await response.text().catch(() => '')
+    const trimmedBody = bodyText.trim()
+
+    if (contentType.includes('application/json') && trimmedBody) {
+      try {
+        const parsed = JSON.parse(trimmedBody)
+        return parsed?.message || parsed?.error || parsed?.detail || fallbackMessage
+      } catch {
+        // Fall through to the raw body text below.
+      }
+    }
+
+    return trimmedBody || fallbackMessage
+  }
+
+  notifyAuthExpired(message) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pulsechecks:auth-expired', { detail: { message } }))
+    }
   }
 
   async request(path, options = {}) {
@@ -24,20 +47,35 @@ class ApiClient {
     })
 
     if (!response.ok) {
-      // Auto-logout on 401 (expired/invalid token)
+      const fallbackMessage = response.status === 401
+        ? 'Your session expired. Please sign in again.'
+        : `Request failed with status ${response.status}`
+      const message = await this.readErrorMessage(response, fallbackMessage)
+
       if (response.status === 401) {
-        // Clear tokens locally first to prevent redirect loop
         clearTokens()
-        // Redirect to login instead of Cognito logout to avoid loop
-        window.location.href = '/login'
-        return
+        this.notifyAuthExpired(message)
+        const error = new Error(message)
+        error.status = response.status
+        error.isAuthError = true
+        throw error
       }
 
-      const error = await response.json().catch(() => ({ error: 'Request failed' }))
-      throw new Error(error.error || `HTTP ${response.status}`)
+      const error = new Error(message)
+      error.status = response.status
+      throw error
     }
 
-    return response.json()
+    const bodyText = await response.text()
+    if (!bodyText) {
+      return null
+    }
+
+    try {
+      return JSON.parse(bodyText)
+    } catch {
+      return bodyText
+    }
   }
 
   // User

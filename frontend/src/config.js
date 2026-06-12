@@ -47,9 +47,3 @@ export const config = {
   firebaseConfig: cloudConfig.auth.type === 'firebase' ? cloudConfig.auth.firebaseConfig : null,
 }
 
-// Log current configuration in development
-if (import.meta.env.DEV) {
-  console.log('[Config] Cloud provider:', cloudProvider)
-  console.log('[Config] API URL:', config.apiUrl)
-  console.log('[Config] Auth type:', config.auth.type)
-}

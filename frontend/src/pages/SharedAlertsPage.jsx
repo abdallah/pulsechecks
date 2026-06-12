@@ -62,14 +62,13 @@ export default function SharedAlertsPage({ user, onLogout }) {
               })
             }
           }
-        } catch (error) {
-          console.error(`Failed to load channels for team ${team.name}:`, error)
+        } catch {
+          continue
         }
       }
 
       setSharedChannels(allSharedChannels)
-    } catch (error) {
-      console.error('Failed to load shared channels:', error)
+    } catch {
     } finally {
       setLoading(false)
     }

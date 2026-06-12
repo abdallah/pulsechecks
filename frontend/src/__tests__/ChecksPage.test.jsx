@@ -291,16 +291,13 @@ describe('ChecksPage', () => {
   });
 
   test('handles checks loading error', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     api.listChecks.mockRejectedValue(new Error('Load Error'));
     
     renderWithRouter(<ChecksPage user={mockUser} />);
     
     await waitFor(() => {
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to load checks:', expect.any(Error));
+      expect(screen.getByText('Failed to load checks. Please try again.')).toBeInTheDocument();
     });
-    
-    consoleSpy.mockRestore();
   });
 
   test('handles check creation error', async () => {

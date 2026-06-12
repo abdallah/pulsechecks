@@ -13,8 +13,7 @@ export default function CallbackPage({ onLogin }) {
         onLogin(tokens)
         navigate('/', { replace: true })
       } catch (err) {
-        console.error('Callback error:', err)
-        setError(err.message)
+        setError(err?.message || 'Authentication failed. Please try signing in again.')
       }
     }
     

@@ -11,6 +11,7 @@ Terraform configuration for deploying Pulsechecks on Google Cloud Platform.
 - **Monitoring**: Cloud Monitoring + Cloud Logging
 - **Scheduling**: Cloud Scheduler (late detection every 2 minutes)
 - **Notifications**: Cloud Pub/Sub
+- **Edge throttling**: Global HTTPS load balancer + Cloud Armor in production
 
 ## Cost Estimate
 

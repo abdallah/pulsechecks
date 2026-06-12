@@ -73,6 +73,6 @@ module "acm_validation_records" {
   validation_method = "DNS"
   zone_id           = data.aws_route53_zone.main.zone_id
 
-  distinct_domain_names                         = module.acm_certificate.distinct_domain_names
-  acm_certificate_domain_validation_options     = module.acm_certificate.acm_certificate_domain_validation_options
+  distinct_domain_names                     = module.acm_certificate.distinct_domain_names
+  acm_certificate_domain_validation_options = module.acm_certificate.acm_certificate_domain_validation_options
 }

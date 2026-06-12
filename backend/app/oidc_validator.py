@@ -165,26 +165,7 @@ def validate_oidc_token(
         except ExpiredSignatureError as e:
             raise TokenExpiredError(f"Token has expired: {e}")
         except jwt.InvalidAudienceError as e:
-            if not expected_service_account:
-                raise InvalidAudienceError(f"Token audience mismatch: {e}")
-
-            try:
-                claims = jwt.decode(
-                    token,
-                    public_key,
-                    algorithms=["RS256"],
-                    issuer="https://accounts.google.com",
-                    options={
-                        "verify_exp": True,
-                        "verify_aud": False,
-                        "verify_iss": True,
-                    }
-                )
-                logger.warning(
-                    "Accepting OIDC token with mismatched audience because service account validation is enabled"
-                )
-            except InvalidTokenError:
-                raise InvalidAudienceError(f"Token audience mismatch: {e}")
+            raise InvalidAudienceError(f"Token audience mismatch: {e}")
         except jwt.InvalidIssuerError as e:
             raise InvalidIssuerError(f"Invalid token issuer: {e}")
         except InvalidTokenError as e:

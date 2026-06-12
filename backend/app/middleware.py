@@ -74,6 +74,11 @@ class RateLimiter:
 general_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 req/min
 ping_limiter = RateLimiter(max_requests=1000, window_seconds=60)    # 1000 req/min for pings
 
+logger.warning(
+    "Rate limiter is process-local only. In multi-instance deployments, "
+    "use API Gateway throttling or a shared store for global enforcement."
+)
+
 async def rate_limit_middleware(request: Request, call_next):
     """Rate limiting middleware."""
     # Get client IP

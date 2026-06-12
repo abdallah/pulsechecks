@@ -16,6 +16,18 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "api_gateway_throttling_rate_limit" {
+  description = "Default API Gateway request rate limit (requests per second)"
+  type        = number
+  default     = 1000
+}
+
+variable "api_gateway_throttling_burst_limit" {
+  description = "Default API Gateway burst limit"
+  type        = number
+  default     = 2000
+}
+
 variable "google_client_id" {
   description = "Google OAuth Client ID"
   type        = string

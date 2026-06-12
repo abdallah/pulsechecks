@@ -105,9 +105,14 @@ resource "google_cloud_run_service_iam_member" "public_access" {
   member   = "allUsers"
 }
 
+locals {
+  create_dns_records    = var.enable_dns_records && var.dns_managed_zone_name != ""
+  edge_throttling_notes = var.edge_throttling_enabled ? "Cloud Armor and a global HTTPS load balancer are expected in front of this service." : "Edge throttling is disabled; Cloud Run access remains direct."
+}
+
 # Custom domain mapping for Cloud Run (optional)
 resource "google_cloud_run_domain_mapping" "api_domain" {
-  count    = var.enable_custom_domain_mapping ? 1 : 0
+  count    = var.enable_custom_domain_mapping && !var.edge_throttling_enabled ? 1 : 0
   provider = google-beta
   name     = var.api_domain_name
   location = var.gcp_region
@@ -124,12 +129,8 @@ resource "google_cloud_run_domain_mapping" "api_domain" {
   depends_on = [google_cloud_run_service.pulsechecks_api]
 }
 
-locals {
-  create_dns_records = var.enable_dns_records && var.dns_managed_zone_name != ""
-}
-
 resource "google_dns_record_set" "api_domain_cname" {
-  count        = local.create_dns_records ? 1 : 0
+  count        = local.create_dns_records && !var.edge_throttling_enabled ? 1 : 0
   managed_zone = var.dns_managed_zone_name
   name         = "${var.api_domain_name}."
   type         = "CNAME"

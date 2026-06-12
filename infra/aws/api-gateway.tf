@@ -36,8 +36,8 @@ resource "aws_apigatewayv2_stage" "main" {
   }
 
   default_route_settings {
-    throttling_rate_limit  = 1000
-    throttling_burst_limit = 2000
+    throttling_rate_limit  = var.api_gateway_throttling_rate_limit
+    throttling_burst_limit = var.api_gateway_throttling_burst_limit
   }
 
   tags = {
@@ -92,51 +92,51 @@ locals {
   routes = {
     # Public routes
     health = { method = "GET", path = "/health", integration = "api_handler" }
-    
+
     # Ping routes
-    ping_get = { method = "GET", path = "/ping/{token}", integration = "ping_handler" }
-    ping_post = { method = "POST", path = "/ping/{token}", integration = "ping_handler" }
-    ping_fail_get = { method = "GET", path = "/ping/{token}/fail", integration = "ping_handler" }
-    ping_fail_post = { method = "POST", path = "/ping/{token}/fail", integration = "ping_handler" }
-    ping_start_get = { method = "GET", path = "/ping/{token}/start", integration = "ping_handler" }
+    ping_get        = { method = "GET", path = "/ping/{token}", integration = "ping_handler" }
+    ping_post       = { method = "POST", path = "/ping/{token}", integration = "ping_handler" }
+    ping_fail_get   = { method = "GET", path = "/ping/{token}/fail", integration = "ping_handler" }
+    ping_fail_post  = { method = "POST", path = "/ping/{token}/fail", integration = "ping_handler" }
+    ping_start_get  = { method = "GET", path = "/ping/{token}/start", integration = "ping_handler" }
     ping_start_post = { method = "POST", path = "/ping/{token}/start", integration = "ping_handler" }
-    
+
     # User routes
-    me = { method = "GET", path = "/me", integration = "api_handler" }
+    me          = { method = "GET", path = "/me", integration = "api_handler" }
     me_subpaths = { method = "GET", path = "/me/{proxy+}", integration = "api_handler" }
-    
+
     # Team routes
-    teams_list = { method = "GET", path = "/teams", integration = "api_handler" }
+    teams_list   = { method = "GET", path = "/teams", integration = "api_handler" }
     teams_create = { method = "POST", path = "/teams", integration = "api_handler" }
-    teams_get = { method = "GET", path = "/teams/{team_id}", integration = "api_handler" }
+    teams_get    = { method = "GET", path = "/teams/{team_id}", integration = "api_handler" }
     teams_delete = { method = "DELETE", path = "/teams/{team_id}", integration = "api_handler" }
-    
+
     # Check routes
-    checks_list = { method = "GET", path = "/teams/{team_id}/checks", integration = "api_handler" }
-    checks_create = { method = "POST", path = "/teams/{team_id}/checks", integration = "api_handler" }
-    check_get = { method = "GET", path = "/teams/{team_id}/checks/{check_id}", integration = "api_handler" }
-    check_update = { method = "PATCH", path = "/teams/{team_id}/checks/{check_id}", integration = "api_handler" }
-    check_pause = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/pause", integration = "api_handler" }
-    check_resume = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/resume", integration = "api_handler" }
+    checks_list        = { method = "GET", path = "/teams/{team_id}/checks", integration = "api_handler" }
+    checks_create      = { method = "POST", path = "/teams/{team_id}/checks", integration = "api_handler" }
+    check_get          = { method = "GET", path = "/teams/{team_id}/checks/{check_id}", integration = "api_handler" }
+    check_update       = { method = "PATCH", path = "/teams/{team_id}/checks/{check_id}", integration = "api_handler" }
+    check_pause        = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/pause", integration = "api_handler" }
+    check_resume       = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/resume", integration = "api_handler" }
     check_rotate_token = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/rotate-token", integration = "api_handler" }
-    check_delete = { method = "DELETE", path = "/teams/{team_id}/checks/{check_id}", integration = "api_handler" }
-    check_escalate = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/escalate", integration = "api_handler" }
-    check_suppress = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/suppress", integration = "api_handler" }
-    check_pings = { method = "GET", path = "/teams/{team_id}/checks/{check_id}/pings", integration = "api_handler" }
+    check_delete       = { method = "DELETE", path = "/teams/{team_id}/checks/{check_id}", integration = "api_handler" }
+    check_escalate     = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/escalate", integration = "api_handler" }
+    check_suppress     = { method = "POST", path = "/teams/{team_id}/checks/{check_id}/suppress", integration = "api_handler" }
+    check_pings        = { method = "GET", path = "/teams/{team_id}/checks/{check_id}/pings", integration = "api_handler" }
     # Bulk operations routes
-    checks_bulk_pause = { method = "POST", path = "/teams/{team_id}/checks/bulk/pause", integration = "api_handler" }
+    checks_bulk_pause  = { method = "POST", path = "/teams/{team_id}/checks/bulk/pause", integration = "api_handler" }
     checks_bulk_resume = { method = "POST", path = "/teams/{team_id}/checks/bulk/resume", integration = "api_handler" }
-    
+
     # Member routes
-    members_list = { method = "GET", path = "/teams/{team_id}/members", integration = "api_handler" }
-    members_add = { method = "POST", path = "/teams/{team_id}/members", integration = "api_handler" }
+    members_list   = { method = "GET", path = "/teams/{team_id}/members", integration = "api_handler" }
+    members_add    = { method = "POST", path = "/teams/{team_id}/members", integration = "api_handler" }
     members_remove = { method = "DELETE", path = "/teams/{team_id}/members/{user_id}", integration = "api_handler" }
     members_update = { method = "PATCH", path = "/teams/{team_id}/members/{user_id}", integration = "api_handler" }
-    
+
     # Unified channel routes (replaces alerts + mattermost)
-    channels_list = { method = "GET", path = "/teams/{team_id}/channels", integration = "api_handler" }
+    channels_list   = { method = "GET", path = "/teams/{team_id}/channels", integration = "api_handler" }
     channels_create = { method = "POST", path = "/teams/{team_id}/channels", integration = "api_handler" }
-    channels_get = { method = "GET", path = "/teams/{team_id}/channels/{channel_id}", integration = "api_handler" }
+    channels_get    = { method = "GET", path = "/teams/{team_id}/channels/{channel_id}", integration = "api_handler" }
     channels_update = { method = "PATCH", path = "/teams/{team_id}/channels/{channel_id}", integration = "api_handler" }
     channels_delete = { method = "DELETE", path = "/teams/{team_id}/channels/{channel_id}", integration = "api_handler" }
   }
@@ -145,7 +145,7 @@ locals {
 # Create all routes using for_each
 resource "aws_apigatewayv2_route" "routes" {
   for_each = local.routes
-  
+
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "${each.value.method} ${each.value.path}"
   target    = "integrations/${each.value.integration == "api_handler" ? aws_apigatewayv2_integration.api_handler.id : aws_apigatewayv2_integration.ping_handler.id}"

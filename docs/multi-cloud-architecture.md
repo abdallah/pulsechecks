@@ -355,7 +355,7 @@ Never commit:
 ### Network Security
 
 - **AWS**: API Gateway throttling, WAF optional
-- **GCP**: Cloud Armor optional, Cloud Run IAM
+- **GCP**: Cloud Armor requires the external HTTPS load balancer path
 
 Both:
 - HTTPS only (TLS 1.2+)

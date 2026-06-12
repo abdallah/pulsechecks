@@ -24,6 +24,11 @@
 - Cache hit ratio
 - Origin response time
 
+**Edge Throttling:**
+- AWS production: API Gateway stage throttling is the primary edge control.
+- GCP production: Cloud Armor in front of a global HTTPS load balancer is the primary edge control.
+- App-local FastAPI rate limiting is defense-in-depth only.
+
 ### CloudWatch Alarms
 
 The system includes pre-configured alarms for:

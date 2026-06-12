@@ -94,3 +94,21 @@ variable "dns_cname_target" {
   type        = string
   default     = "ghs.googlehosted.com."
 }
+
+variable "edge_throttling_enabled" {
+  description = "Enable GCP edge throttling in front of Cloud Run"
+  type        = bool
+  default     = true
+}
+
+variable "edge_throttle_requests_per_second" {
+  description = "Cloud Armor rate limit threshold for GCP edge throttling"
+  type        = number
+  default     = 1000
+}
+
+variable "edge_throttle_burst" {
+  description = "Cloud Armor burst threshold for GCP edge throttling"
+  type        = number
+  default     = 2000
+}

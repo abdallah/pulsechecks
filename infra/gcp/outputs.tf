@@ -49,6 +49,16 @@ output "dns_records_managed" {
   value       = var.enable_dns_records && var.dns_managed_zone_name != ""
 }
 
+output "edge_throttling_enabled" {
+  description = "Whether GCP edge throttling is enabled"
+  value       = var.edge_throttling_enabled
+}
+
+output "edge_throttling_notes" {
+  description = "Summary of GCP edge throttling posture"
+  value       = local.edge_throttling_notes
+}
+
 output "deployment_instructions" {
   description = "Instructions for deploying the application"
   value       = <<-EOT

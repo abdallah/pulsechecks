@@ -126,6 +126,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         claims = await verify_jwt_token(raw)
         # Extract user info
         user_id, email, name, email_verified = extract_user_info(claims)
+
+        # Enforce email verification
+        if not email_verified:
+            raise UnauthorizedError("Email address not verified")
+
         # Check domain allowlist
         if not check_domain_allowed(email):
             raise ForbiddenError("Email domain not allowed")

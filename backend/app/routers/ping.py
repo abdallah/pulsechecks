@@ -169,8 +169,8 @@ async def _record_ping_internal(
 async def _send_recovery_alert_async(check):
     """Send recovery alert via AlertChannels only."""
     try:
-        from ..db import DynamoDBClient
-        db = DynamoDBClient()
+        from ..db import create_db_client
+        db = create_db_client()
 
         # Get team info for alert channels
         team = await db.get_team(check.team_id)

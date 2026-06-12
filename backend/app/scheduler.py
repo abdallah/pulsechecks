@@ -5,6 +5,7 @@ import httpx
 from .db.factory import create_db_client
 from .models.enums import CheckStatus, PingType
 from .logging_config import get_logger
+from .security import validate_webhook_url
 from .utils import get_iso_timestamp, get_current_time_seconds, calculate_next_due, calculate_alert_after
 
 logger = get_logger(__name__)
@@ -41,13 +42,31 @@ async def poll_http_checks():
 
     logger.info(f"HTTP poller: {len(due_checks)} checks due out of {len(all_checks)} total")
 
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False) as client:
         tasks = [_poll_single_check(client, db, check) for check in due_checks]
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def _poll_single_check(client, db, check):
     """Poll a single HTTP check and record the result."""
+    # Revalidate URL safety immediately before polling (fail closed)
+    is_safe, ssrf_error = validate_webhook_url(check.url)
+    if not is_safe:
+        logger.warning(f"HTTP check {check.check_id} blocked by SSRF protection: {ssrf_error}")
+        from .routers.ping import _record_ping_internal
+        try:
+            await _record_ping_internal(
+                check.token,
+                db,
+                ping_type=PingType.FAIL,
+                data=f"SSRF protection: {ssrf_error}",
+                code="ssrf_blocked",
+                response_time_ms=0,
+            )
+        except Exception as e:
+            logger.error(f"Failed to record SSRF block for check {check.check_id}: {e}")
+        return
+
     error_detail = None
     error_code = None
     response_time_ms = None

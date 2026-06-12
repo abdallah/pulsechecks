@@ -83,6 +83,10 @@ class CreateCheckRequest(BaseModel):
                 raise ValueError("url is required for http checks")
             if not self.url.startswith(("http://", "https://")):
                 raise ValueError("url must start with http:// or https://")
+            from ..security import validate_webhook_url
+            is_safe, error_msg = validate_webhook_url(self.url)
+            if not is_safe:
+                raise ValueError(f"Unsafe HTTP check URL: {error_msg}")
         return self
 
 
@@ -130,6 +134,18 @@ class UpdateCheckRequest(BaseModel):
         if v is not None:
             if len(v) > 10:
                 raise ValueError("Maximum 10 alert channels allowed")
+        return v
+
+    @field_validator("url")
+    @classmethod
+    def validate_url_ssrf(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            if not v.startswith(("http://", "https://")):
+                raise ValueError("url must start with http:// or https://")
+            from ..security import validate_webhook_url
+            is_safe, error_msg = validate_webhook_url(v)
+            if not is_safe:
+                raise ValueError(f"Unsafe HTTP check URL: {error_msg}")
         return v
 
     @model_validator(mode='after')

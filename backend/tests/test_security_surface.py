@@ -4,11 +4,13 @@ import ast
 
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.handlers import late_detector_handler, __all__ as handlers_all
 from app.main import app
 
 
 CLIENT = TestClient(app)
+SETTINGS = get_settings()
 
 
 def test_late_detector_handler_defined_once_and_exported():
@@ -23,11 +25,11 @@ def test_late_detector_handler_defined_once_and_exported():
 
 
 def test_cors_allows_required_request_headers_and_not_wildcard():
-    """CORS should use an explicit allow-list for frontend/auth headers."""
+    """CORS should use an explicit allow-list for the configured frontend origin."""
     response = CLIENT.options(
         "/health",
         headers={
-            "Origin": "https://pulsechecks.web.app",
+            "Origin": SETTINGS.frontend_url,
             "Access-Control-Request-Method": "GET",
             "Access-Control-Request-Headers": "authorization,content-type,x-correlation-id",
         },
@@ -39,6 +41,7 @@ def test_cors_allows_required_request_headers_and_not_wildcard():
     assert "authorization" in allow_headers
     assert "content-type" in allow_headers
     assert "x-correlation-id" in allow_headers
+    assert response.headers.get("access-control-allow-origin") == SETTINGS.frontend_url
 
 
 def test_security_headers_present_on_api_responses():

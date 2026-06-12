@@ -16,6 +16,15 @@ def mock_env_vars(monkeypatch):
     monkeypatch.setenv("DEBUG", "false")
 
 
+@pytest.fixture(autouse=True)
+def clear_oidc_cert_cache():
+    """Clear OIDC cert cache between tests to prevent cross-test pollution."""
+    from app.oidc_validator import _google_certs_cache
+    _google_certs_cache.clear()
+    yield
+    _google_certs_cache.clear()
+
+
 @pytest.fixture
 def sample_user_data():
     """Sample user data for tests."""

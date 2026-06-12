@@ -33,30 +33,42 @@ async def correlation_id_middleware(request: Request, call_next):
         clear_request_context()
 
 class RateLimiter:
-    """Simple in-memory rate limiter."""
+    """Process-local rate limiter (sliding window).
+
+    WARNING: This is NOT distributed. In multi-process/multi-instance deployments
+    (e.g., multiple Lambda invocations or Cloud Run instances), each process
+    maintains its own counter. This provides per-process defense-in-depth only
+    and MUST NOT be relied upon as production-grade global rate limiting.
+    For production enforcement, use API Gateway throttling or a shared store
+    (e.g., DynamoDB atomic counters, Redis, or Cloud Armor).
+    """
     
     def __init__(self, max_requests: int = 100, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests: Dict[str, Deque[float]] = defaultdict(deque)
-    
+
     def is_allowed(self, key: str) -> bool:
-        """Check if request is allowed for the given key."""
-        now = time.time()
-        window_start = now - self.window_seconds
-        
-        # Clean old requests
-        request_times = self.requests[key]
-        while request_times and request_times[0] < window_start:
-            request_times.popleft()
-        
-        # Check if under limit
-        if len(request_times) >= self.max_requests:
+        """Check if request is allowed for the given key. Fails closed on error."""
+        try:
+            now = time.time()
+            window_start = now - self.window_seconds
+
+            # Clean old requests
+            request_times = self.requests[key]
+            while request_times and request_times[0] < window_start:
+                request_times.popleft()
+
+            # Check if under limit
+            if len(request_times) >= self.max_requests:
+                return False
+
+            # Add current request
+            request_times.append(now)
+            return True
+        except Exception:
+            # Fail closed: deny on any internal error
             return False
-        
-        # Add current request
-        request_times.append(now)
-        return True
 
 # Global rate limiters
 general_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 req/min

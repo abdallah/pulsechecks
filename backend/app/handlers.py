@@ -229,6 +229,9 @@ async def _send_channel_alert(channel, check, team, sns_client, metrics, alert_t
             if not webhook_url:
                 return False
 
+            from .security import assert_webhook_url_safe
+            assert_webhook_url_safe(webhook_url)
+
             payload = {
                 "event": alert_type,
                 "check": {

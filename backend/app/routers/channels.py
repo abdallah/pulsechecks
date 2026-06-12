@@ -297,6 +297,8 @@ async def _send_test_notification(channel: "AlertChannel", team_id: str) -> None
         webhook_url = channel.configuration.get("webhook_url")
         if not webhook_url:
             raise ValueError("Webhook URL not configured")
+        from ..security import assert_webhook_url_safe
+        assert_webhook_url_safe(webhook_url)
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(webhook_url, json={
                 "text": f"🔔 **PulseChecks Test** — channel *{channel.display_name}* is working!"
@@ -308,6 +310,8 @@ async def _send_test_notification(channel: "AlertChannel", team_id: str) -> None
         webhook_url = channel.configuration.get("webhook_url")
         if not webhook_url:
             raise ValueError("Webhook URL not configured")
+        from ..security import assert_webhook_url_safe
+        assert_webhook_url_safe(webhook_url)
         headers = channel.configuration.get("headers") or {}
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(webhook_url, json={

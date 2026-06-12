@@ -7,16 +7,19 @@ import json
 import logging
 from typing import Dict, Optional
 from datetime import datetime, timezone
-from functools import lru_cache
 from starlette.requests import Request
 
 import jwt
 import httpx
+from cachetools import TTLCache
 from cryptography import x509
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError, InvalidIssuerError
 
 logger = logging.getLogger(__name__)
+
+# TTL cache: max 1 entry, expires after 1 hour (3600 seconds)
+_google_certs_cache: TTLCache = TTLCache(maxsize=1, ttl=3600)
 
 
 class OIDCValidationError(Exception):
@@ -63,12 +66,16 @@ def _load_public_key(cert_str: str):
         return certificate.public_key()
 
 
-@lru_cache(maxsize=1)
 def _get_google_certs() -> Dict[str, str]:
     """Fetch Google's public OIDC signing certificates.
 
-    These are cached for 1 hour by default.
+    Cached with a 1-hour TTL via cachetools.TTLCache.
     """
+    _CACHE_KEY = "certs"
+    cached = _google_certs_cache.get(_CACHE_KEY)
+    if cached is not None:
+        return cached
+
     try:
         with httpx.Client(timeout=10) as client:
             response = client.get(
@@ -76,10 +83,16 @@ def _get_google_certs() -> Dict[str, str]:
             )
             response.raise_for_status()
             certs = response.json()
+            _google_certs_cache[_CACHE_KEY] = certs
             return certs
     except Exception as e:
         logger.error(f"Failed to fetch Google OIDC certificates: {e}")
         raise OIDCValidationError("Unable to fetch Google OIDC certificates")
+
+
+def invalidate_google_certs_cache() -> None:
+    """Invalidate the cached Google OIDC certificates (for testing/rotation)."""
+    _google_certs_cache.clear()
 
 
 def validate_oidc_token(

@@ -21,6 +21,7 @@ from app.oidc_validator import (
     get_cloud_run_url,
     get_expected_scheduler_sa,
     _get_google_certs,
+    invalidate_google_certs_cache,
 )
 
 
@@ -387,11 +388,8 @@ class TestGoogleCertsFetching:
 
     def test_fetch_google_certs_network_error(self):
         """Test handling network error when fetching certificates."""
-        # Clear the LRU cache before test to avoid cached real certs
-        try:
-            _get_google_certs.cache_clear()
-        except AttributeError:
-            pass  # Cache already cleared or not available
+        # Clear the TTL cache before test to avoid cached real certs
+        invalidate_google_certs_cache()
 
         with patch('app.oidc_validator.httpx.Client') as mock_client_class:
             mock_client = MagicMock()
@@ -407,11 +405,8 @@ class TestGoogleCertsFetching:
 
     def test_fetch_google_certs_http_error(self):
         """Test handling HTTP error when fetching certificates."""
-        # Clear the LRU cache before test to avoid cached real certs
-        try:
-            _get_google_certs.cache_clear()
-        except AttributeError:
-            pass  # Cache already cleared or not available
+        # Clear the TTL cache before test to avoid cached real certs
+        invalidate_google_certs_cache()
 
         with patch('app.oidc_validator.httpx.Client') as mock_client_class:
             mock_client = MagicMock()

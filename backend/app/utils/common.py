@@ -19,12 +19,6 @@ def parse_iso_timestamp(iso_string: str) -> int:
     return int(dt.timestamp())
 
 
-def parse_iso_timestamp(iso_string: str) -> int:
-    """Parse ISO 8601 timestamp string to Unix timestamp in seconds."""
-    dt = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
-    return int(dt.timestamp())
-
-
 def get_current_time_seconds() -> int:
     """Get current Unix timestamp in seconds."""
     return int(datetime.now(timezone.utc).timestamp())

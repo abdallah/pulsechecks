@@ -1,5 +1,6 @@
 """FastAPI dependencies for auth and database access."""
 import hashlib
+import inspect
 from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import Depends
@@ -21,27 +22,83 @@ class CurrentUser:
         self.name = name
 
 
+def _parse_api_token_expires_at(expires_at: object) -> datetime | None:
+    """Parse an API token expiry timestamp, returning None for missing values.
+
+    Any malformed non-empty value is treated as invalid so auth fails closed.
+    """
+    if expires_at in (None, ""):
+        return None
+
+    if isinstance(expires_at, datetime):
+        dt = expires_at
+    elif isinstance(expires_at, str):
+        try:
+            dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise UnauthorizedError("Invalid API token") from exc
+    else:
+        raise UnauthorizedError("Invalid API token")
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _get_api_token_collection(db: DatabaseInterface):
+    """Return the API token collection from whichever database wrapper is provided."""
+    db_wrapper = getattr(db, "db", None)
+    if db_wrapper is not None:
+        collection = getattr(db_wrapper, "collection", None)
+        if callable(collection):
+            return collection("api_tokens")
+
+    collection = getattr(db, "collection", None)
+    if callable(collection):
+        return collection("api_tokens")
+
+    raise UnauthorizedError("Invalid API token")
+
+
+async def _maybe_await(value):
+    if inspect.isawaitable(value) and not inspect.isasyncgen(value):
+        return await value
+    return value
+
+
 async def _resolve_api_token(token: str, db: DatabaseInterface) -> CurrentUser:
     """Look up a pc_ prefixed API token in Firestore and return the associated user."""
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     try:
-        col = db.db.collection("api_tokens")
+        col = _get_api_token_collection(db)
         docs = col.where("token_hash", "==", token_hash)
-        async for doc in docs.stream():
+        stream = await _maybe_await(docs.stream())
+        async for doc in stream:
             data = doc.to_dict()
+            if not isinstance(data, dict):
+                raise UnauthorizedError("Invalid API token")
+
+            expires_at = _parse_api_token_expires_at(data.get("expires_at"))
+            if expires_at is not None and expires_at <= datetime.now(timezone.utc):
+                raise UnauthorizedError("Invalid API token")
+
             try:
-                await col.document(data["token_id"]).update(
+                token_id = data["token_id"]
+                await col.document(token_id).update(
                     {"last_used_at": datetime.now(timezone.utc).isoformat()}
                 )
             except Exception:
                 # Usage tracking is best-effort; auth should still succeed.
                 pass
+
             return CurrentUser(
                 user_id=data["user_id"],
                 email="",
                 name=data.get("name", ""),
             )
-    except KeyError:
+    except UnauthorizedError:
+        raise
+    except Exception:
         pass
     raise UnauthorizedError("Invalid API token")
 
@@ -56,8 +113,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     raw = credentials.credentials
 
     if raw.startswith("pc_"):
-        db = create_db_client()
-        return await _resolve_api_token(raw, db)
+        try:
+            db = create_db_client()
+            return await _resolve_api_token(raw, db)
+        except UnauthorizedError:
+            raise
+        except Exception:
+            raise UnauthorizedError("Invalid API token")
 
     try:
         # Verify JWT token

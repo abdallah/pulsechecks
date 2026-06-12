@@ -72,6 +72,7 @@ async function cognitoHandleCallback() {
   const savedState = sessionStorage.getItem('oauth_state')
 
   if (!savedState) {
+    throw new Error('Missing OAuth state parameter')
   } else if (state !== savedState) {
     throw new Error('Invalid state parameter')
   }

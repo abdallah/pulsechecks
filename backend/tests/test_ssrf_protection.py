@@ -1,5 +1,7 @@
 """Test SSRF protection for webhook URLs."""
+import socket
 import pytest
+from unittest.mock import patch
 from app.security import validate_webhook_url, assert_webhook_url_safe
 from fastapi import HTTPException
 
@@ -9,14 +11,16 @@ class TestSSRFProtection:
 
     def test_valid_external_https_url(self):
         """Valid HTTPS URLs to external services should pass."""
-        url = "https://93.184.216.34/alert"
-        is_valid, error = validate_webhook_url(url)
+        url = "https://webhook.example.com/alert"
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]):
+            is_valid, error = validate_webhook_url(url)
         assert is_valid, f"Valid external URL should pass: {error}"
 
     def test_valid_external_http_url(self):
         """Valid HTTP URLs to external services should pass."""
-        url = "http://93.184.216.34/alert"
-        is_valid, error = validate_webhook_url(url)
+        url = "http://webhook.example.com/alert"
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 80))]):
+            is_valid, error = validate_webhook_url(url)
         assert is_valid, f"Valid external URL should pass: {error}"
 
     def test_invalid_scheme(self):
@@ -40,18 +44,23 @@ class TestSSRFProtection:
         assert not is_valid
         assert "blocked" in error.lower()
 
-    def test_gcp_metadata_internal(self):
-        """GCP metadata.internal endpoint should be blocked."""
-        url = "http://metadata.internal/"
-        is_valid, error = validate_webhook_url(url)
+    def test_dns_resolution_failure_fails_closed(self):
+        """DNS lookup failures must fail closed."""
+        with patch("app.security.ssrf.socket.getaddrinfo", side_effect=socket.gaierror()):
+            is_valid, error = validate_webhook_url("https://webhook.example.com/alert")
         assert not is_valid
+        assert "resolve" in error.lower()
 
-    def test_localhost_127_0_0_1(self):
-        """Localhost 127.0.0.1 should be blocked."""
-        url = "http://127.0.0.1:8080/webhook"
-        is_valid, error = validate_webhook_url(url)
+    def test_dns_resolution_ambiguity_with_blocked_ip_fails_closed(self):
+        """Any blocked resolved address should make the URL unsafe."""
+        addrinfos = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('127.0.0.1', 443)),
+        ]
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=addrinfos):
+            is_valid, error = validate_webhook_url("https://webhook.example.com/alert")
         assert not is_valid
-        assert "blocked" in error.lower()
+        assert "blocked ip" in error.lower()
 
     def test_localhost_hostname(self):
         """localhost hostname should be blocked."""
@@ -128,14 +137,16 @@ class TestSSRFProtection:
 
     def test_valid_external_subdomain(self):
         """Valid external URLs with subdomains should pass."""
-        url = "https://93.184.216.34/v1/webhook"
-        is_valid, error = validate_webhook_url(url)
+        url = "https://webhook.example.com/v1/webhook"
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]):
+            is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_valid_external_with_port(self):
         """Valid external URLs with ports should pass."""
-        url = "https://93.184.216.34:9000/alert"
-        is_valid, error = validate_webhook_url(url)
+        url = "https://webhook.example.com:9000/alert"
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 9000))]):
+            is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_missing_hostname(self):
@@ -152,9 +163,8 @@ class TestSSRFProtection:
 
     def test_assert_webhook_url_safe_valid(self):
         """assert_webhook_url_safe should not raise for valid URLs."""
-        url = "https://93.184.216.34/alert"
-        # Should not raise
-        assert_webhook_url_safe(url)
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]):
+            assert_webhook_url_safe("https://webhook.example.com/alert")
 
     def test_assert_webhook_url_safe_invalid(self):
         """assert_webhook_url_safe should raise HTTPException for invalid URLs."""
@@ -183,48 +193,47 @@ class TestSSRFProtection:
 
     def test_valid_url_with_query_params(self):
         """Valid URLs with query parameters should pass."""
-        url = "https://93.184.216.34/alert?token=abc123&version=v1"
-        is_valid, error = validate_webhook_url(url)
+        url = "https://webhook.example.com/alert?token=***&version=v1"
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]):
+            is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_valid_url_with_fragment(self):
         """Valid URLs with fragments should pass."""
-        url = "https://93.184.216.34/alert#section"
-        is_valid, error = validate_webhook_url(url)
+        url = "https://webhook.example.com/alert#section"
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]):
+            is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_valid_ip_address_external(self):
         """Valid external IP addresses should pass."""
-        # Using a public IP (example.com resolves to 93.184.216.34)
         url = "https://93.184.216.34/webhook"
         is_valid, error = validate_webhook_url(url)
-        # This should pass because it's a public IP
-        # Note: This test might fail if DNS resolution is not available
-        # In that case, the validation will allow it to proceed
         assert is_valid or error, f"Should either be valid or have an error"
 
     def test_azure_metadata_endpoint(self):
         """Azure metadata endpoint should be blocked."""
-        # Azure's metadata endpoint has various alternatives
         url = "http://169.254.169.255/metadata/"
         is_valid, error = validate_webhook_url(url)
         assert not is_valid
 
     def test_very_long_url(self):
         """Very long but valid URLs should pass."""
-        url = "https://93.184.216.34/" + "a" * 2000
-        is_valid, error = validate_webhook_url(url)
+        url = "https://webhook.example.com/" + "a" * 2000
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]):
+            is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_url_with_userinfo(self):
         """URLs with userinfo should still be validated correctly."""
-        url = "https://user:pass@93.184.216.34/webhook"
-        is_valid, error = validate_webhook_url(url)
+        url = "https://user:***@webhook.example.com/webhook"
+        with patch("app.security.ssrf.socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]):
+            is_valid, error = validate_webhook_url(url)
         assert is_valid
 
     def test_url_with_userinfo_to_blocked_host(self):
         """URLs with userinfo targeting blocked hosts should still be blocked."""
-        url = "https://user:pass@localhost/webhook"
+        url = "https://user:***@localhost/webhook"
         is_valid, error = validate_webhook_url(url)
         assert not is_valid
 

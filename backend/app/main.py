@@ -46,8 +46,18 @@ app.add_middleware(
     allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID"],
 )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request, call_next):
+    """Attach a small baseline of security headers to API responses."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    return response
 
 # Add custom middleware (order matters - correlation_id first)
 app.middleware("http")(correlation_id_middleware)

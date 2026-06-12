@@ -285,14 +285,5 @@ async def _send_escalated_alerts(check, team, sns_client, metrics):
             except Exception as e:
                 logger.error(f"Failed to send escalation alert via channel {channel_id} for check {check.check_id}: {e}")
 
-
-def late_detector_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    Late detection Lambda handler (EventBridge triggered).
-    Wrapper to run async implementation in event loop.
-    """
-    return asyncio.run(_late_detector_impl(event, context))
-
-
 # Export handlers
 __all__ = ["late_detector_handler"]

@@ -159,15 +159,17 @@ async def _record_ping_internal(
                 },
             )
 
-        # Send recovery alert if check was late and is now up
-        if was_late and ping_type == PingType.SUCCESS:
+        # Enqueue recovery alerts if check was late and is now up.
+        # Enqueue-only (attempt_now=False): the ping request must never
+        # block on outbound notification calls. The late-detection
+        # scheduler drains the queue within ~2 minutes.
+        if was_late and ping_type == PingType.SUCCESS and check.alert_channels:
             try:
-                await _send_recovery_alert_async(check)
-                metrics.alert_sent(check.team_id, check.check_id, 'recovery', True)
+                from ..alert_dispatch import enqueue_check_alerts
+                await enqueue_check_alerts(check=check, db=db, alert_type="recovery", attempt_now=False)
             except Exception as e:
-                logger.error(f"Recovery alert failed for check {check.check_id}: {e}")
-                metrics.alert_sent(check.team_id, check.check_id, 'recovery', False)
-                # Continue - don't let alert failure break the ping
+                logger.error(f"Failed to enqueue recovery alerts for check {check.check_id}: {e}")
+                # Continue - don't let enqueue failure break the ping
 
         message = "Ping recorded" if ping_type == PingType.SUCCESS else "Failure recorded"
         return OkResponse(message=message)
@@ -176,40 +178,6 @@ async def _record_ping_internal(
         metrics.ping_received(check.team_id, check.check_id, True)
         log_business_event('ping_received_paused', team_id=check.team_id, check_id=check.check_id)
         return OkResponse(message="Ping recorded (check is paused)")
-
-
-async def _send_recovery_alert_async(check):
-    """Send recovery alert via AlertChannels only."""
-    try:
-        from ..db import create_db_client
-        db = create_db_client()
-
-        # Get team info for alert channels
-        team = await db.get_team(check.team_id)
-
-        # Send recovery alerts via modern AlertChannels only
-        if check.alert_channels:
-            for channel_id in check.alert_channels:
-                try:
-                    channel = await db.get_alert_channel(check.team_id, channel_id)
-                    if not channel:
-                        logger.warning(f"Recovery alert channel {channel_id} not found for check {check.check_id}")
-                        continue
-
-                    # Send recovery alert via the channel
-                    from ..handlers import _send_channel_alert
-                    success = await _send_channel_alert(channel, check, team, None, None, "recovery")
-                    if success:
-                        logger.info(f"Recovery alert sent via channel {channel.name} ({channel.type.value}) for check {check.check_id}")
-
-                except Exception as e:
-                    logger.error(f"Failed to send recovery alert via channel {channel_id} for check {check.check_id}: {e}")
-        else:
-            logger.info(f"No alert channels configured for check {check.check_id} - no recovery alert sent")
-
-    except Exception as e:
-        logger.error(f"Error in _send_recovery_alert_async: {e}")
-        raise  # Re-raise so the caller can handle it
 
 
 @router.get("/{token}", response_model=OkResponse)

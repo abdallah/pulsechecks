@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 
 from ..models import (
     User, Team, TeamMember, Check, Ping, Role,
-    PendingInvitation, AlertChannel, MaintenanceWindow, Report
+    PendingInvitation, AlertChannel, AlertDelivery, MaintenanceWindow, Report
 )
 
 
@@ -227,6 +227,28 @@ class DatabaseInterface(ABC):
     @abstractmethod
     async def delete_maintenance_window(self, team_id: str, window_id: str) -> None:
         """Delete a maintenance window."""
+        pass
+
+    # Alert delivery queue / history operations
+
+    @abstractmethod
+    async def create_alert_delivery(self, delivery: AlertDelivery) -> None:
+        """Persist a new alert delivery record."""
+        pass
+
+    @abstractmethod
+    async def update_alert_delivery(self, delivery: AlertDelivery) -> None:
+        """Update an alert delivery's status/attempt fields."""
+        pass
+
+    @abstractmethod
+    async def query_due_alert_deliveries(self, current_time_seconds: int, limit: int = 100) -> List[AlertDelivery]:
+        """Query pending deliveries whose next_attempt_at is due."""
+        pass
+
+    @abstractmethod
+    async def list_alert_deliveries(self, team_id: str, check_id: str | None = None, limit: int = 50) -> List[AlertDelivery]:
+        """List delivery history for a team (optionally one check), newest first."""
         pass
 
     @abstractmethod

@@ -117,6 +117,30 @@ class Ping(BaseModel):
     response_time_ms: Optional[int] = None
 
 
+class AlertDelivery(BaseModel):
+    """One alert delivery to one channel — queue item and history entry.
+
+    Lifecycle: pending → delivered, or pending → (retries with backoff)
+    → failed once attempts reach max_attempts (dead-letter state).
+    """
+
+    delivery_id: str
+    team_id: str
+    check_id: str
+    check_name: str
+    channel_id: str
+    channel_type: str
+    channel_name: str
+    alert_type: str  # late | recovery | escalation
+    status: str = "pending"  # pending | delivered | failed
+    attempts: int = 0
+    max_attempts: int = 5
+    next_attempt_at: int = 0  # epoch seconds; 0 = due immediately
+    last_error: Optional[str] = None
+    created_at: str
+    delivered_at: Optional[str] = None
+
+
 class MaintenanceWindow(BaseModel):
     """Scheduled maintenance window entity."""
 

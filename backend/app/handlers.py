@@ -12,6 +12,7 @@ from .config import get_settings
 from .logging_config import get_logger, log_business_event
 from .metrics import get_metrics_client
 from .integrations.mattermost import create_mattermost_client
+from .alert_dispatch import enqueue_check_alerts, process_due_deliveries
 
 logger = get_logger(__name__)
 
@@ -33,14 +34,9 @@ async def _late_detector_impl(event: Dict[str, Any], context: Any) -> Dict[str, 
     due_checks = await db.query_due_checks(current_time, limit=100)
 
     alerts_queued = 0
-    mattermost_alerts_sent = 0
+    alerts_delivered = 0
     escalations_triggered = 0
     alerts_suppressed = 0
-    
-    # Initialize SNS client once if we have checks to process
-    sns_client = None
-    if due_checks:
-        sns_client = boto3.client("sns", region_name=settings.aws_region)
 
     for check in due_checks:
         # Check if alerts are currently suppressed
@@ -65,32 +61,41 @@ async def _late_detector_impl(event: Dict[str, Any], context: Any) -> Dict[str, 
                 await db.suppress_check_alerts(check.team_id, check.check_id, get_iso_timestamp(suppress_until))
                 logger.info(f"Suppressing alerts for check {check.check_id} after {check.consecutive_alert_count} consecutive alerts")
 
-            # Get team info for Mattermost integration
+            # Get team info for alert formatting
             team = await db.get_team(check.team_id)
-            
-            # Send primary alerts (Mattermost + SNS)
-            sns_sent, mattermost_sent = await _send_primary_alerts(check, team, sns_client, metrics)
-            alerts_queued += sns_sent
-            mattermost_alerts_sent += mattermost_sent
+
+            # Enqueue durable deliveries and attempt them immediately;
+            # failures stay pending and are retried with backoff below.
+            deliveries = await enqueue_check_alerts(db, check, "late", team=team)
+            alerts_queued += len(deliveries)
+            alerts_delivered += sum(1 for d in deliveries if d.status == "delivered")
 
         # Check for escalation (even if check was already late)
         if _should_escalate(check, current_time):
             # Trigger escalation
             await db.mark_escalation_triggered(check.team_id, check.check_id, get_iso_timestamp())
-            
+
             # Get team info
             team = await db.get_team(check.team_id)
-            
-            # Send escalated alerts
-            await _send_escalated_alerts(check, team, sns_client, metrics)
+
+            # Enqueue escalated alerts
+            await enqueue_check_alerts(
+                db, check, "escalation",
+                channel_ids=check.escalation_alert_channels, team=team,
+            )
             escalations_triggered += 1
 
+    # Drain the delivery queue: retries with backoff, plus deliveries
+    # enqueued outside scheduler context (e.g. the ping recovery path).
+    drain_stats = await process_due_deliveries(db)
+
     # Record enhanced metrics
-    metrics.late_detection_run(len(due_checks), alerts_queued + mattermost_alerts_sent)
-    log_business_event('enhanced_late_detection_run', 
-        checks_processed=len(due_checks), 
-        sns_alerts_queued=alerts_queued,
-        mattermost_alerts_sent=mattermost_alerts_sent,
+    metrics.late_detection_run(len(due_checks), alerts_queued)
+    log_business_event('enhanced_late_detection_run',
+        checks_processed=len(due_checks),
+        alerts_queued=alerts_queued,
+        alerts_delivered=alerts_delivered,
+        deliveries_retried=drain_stats["processed"],
         escalations_triggered=escalations_triggered,
         alerts_suppressed=alerts_suppressed
     )
@@ -101,7 +106,8 @@ async def _late_detector_impl(event: Dict[str, Any], context: Any) -> Dict[str, 
             {
                 "checksProcessed": len(due_checks),
                 "channelAlertsQueued": alerts_queued,
-                "channelAlertsSent": mattermost_alerts_sent,
+                "channelAlertsSent": alerts_delivered,
+                "deliveriesRetried": drain_stats["processed"],
                 "escalationsTriggered": escalations_triggered,
                 "alertsSuppressed": alerts_suppressed,
             }
@@ -155,33 +161,6 @@ def _should_escalate(check, current_time: int) -> bool:
     return current_time >= escalation_time
 
 
-async def _send_primary_alerts(check, team, sns_client, metrics):
-    """Send primary alerts (Mattermost + SNS + AlertChannels). Returns (sns_sent, mattermost_sent)."""
-    sns_sent = 0
-    mattermost_sent = 0
-    
-    # Legacy Mattermost webhooks removed - use AlertChannels only
-
-    # Send new AlertChannel alerts
-    if check.alert_channels:
-        db = create_db_client()
-        for channel_id in check.alert_channels:
-            try:
-                channel = await db.get_alert_channel(check.team_id, channel_id)
-                if not channel:
-                    logger.warning(f"Alert channel {channel_id} not found for check {check.check_id}")
-                    continue
-                
-                success = await _send_channel_alert(channel, check, team, sns_client, metrics)
-                if success:
-                    logger.info(f"Alert sent via channel {channel.name} ({channel.type.value}) for check {check.check_id}")
-                
-            except Exception as e:
-                logger.error(f"Failed to send alert via channel {channel_id} for check {check.check_id}: {e}")
-    
-    return sns_sent, mattermost_sent
-
-
 async def _send_channel_alert(channel, check, team, sns_client, metrics, alert_type="late"):
     """Send alert via a specific AlertChannel. Returns success boolean."""
     from .models import AlertChannelType
@@ -194,8 +173,11 @@ async def _send_channel_alert(channel, check, team, sns_client, metrics, alert_t
     try:
         if channel.type == AlertChannelType.SNS:
             topic_arn = channel.configuration.get('topic_arn')
-            if not topic_arn or not sns_client:
+            if not topic_arn:
                 return False
+            if sns_client is None:
+                settings = get_settings()
+                sns_client = boto3.client("sns", region_name=settings.aws_region)
                 
             message = {
                 "checkId": check.check_id,
@@ -306,25 +288,6 @@ async def _send_channel_alert(channel, check, team, sns_client, metrics, alert_t
     
     return False
 
-
-async def _send_escalated_alerts(check, team, sns_client, metrics):
-    """Send escalated alerts via AlertChannels only."""
-    # Send escalated alerts via modern AlertChannels
-    if check.escalation_alert_channels:
-        db = create_db_client()
-        for channel_id in check.escalation_alert_channels:
-            try:
-                channel = await db.get_alert_channel(check.team_id, channel_id)
-                if not channel:
-                    logger.warning(f"Escalation alert channel {channel_id} not found for check {check.check_id}")
-                    continue
-                
-                success = await _send_channel_alert(channel, check, team, sns_client, metrics)
-                if success:
-                    logger.info(f"Escalation alert sent via channel {channel.name} ({channel.type.value}) for check {check.check_id}")
-                
-            except Exception as e:
-                logger.error(f"Failed to send escalation alert via channel {channel_id} for check {check.check_id}: {e}")
 
 # Export handlers
 __all__ = ["late_detector_handler"]

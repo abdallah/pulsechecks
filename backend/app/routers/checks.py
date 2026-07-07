@@ -1,7 +1,7 @@
 """Check management endpoints."""
 from collections import Counter
 import math
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query, status, HTTPException
 
 from ..dependencies import AuthUser, Database, check_team_access
@@ -708,17 +708,15 @@ async def escalate_check_immediately(
     # Mark escalation as triggered
     await db.mark_escalation_triggered(team_id, check_id, get_iso_timestamp())
 
-    # Send escalated alerts immediately
+    # Enqueue escalated alerts (durable delivery with retries)
     try:
-        from ..handlers import _send_escalated_alerts
-        import boto3
-        from ..config import get_settings
+        from ..alert_dispatch import enqueue_check_alerts
 
-        settings = get_settings()
-        sns_client = boto3.client("sns", region_name=settings.aws_region)
         team = await db.get_team(team_id)
-
-        await _send_escalated_alerts(check, team, sns_client, get_metrics_client())
+        await enqueue_check_alerts(
+            db, check, "escalation",
+            channel_ids=check.escalation_alert_channels, team=team,
+        )
 
         return OkResponse(message="Escalation triggered successfully")
     except Exception as e:
@@ -900,3 +898,39 @@ async def get_check_uptime(
     windows = await db.list_maintenance_windows(team_id, check_id)
 
     return _build_check_uptime_response(check, pings, windows, from_at, to_at, exclude_maintenance)
+
+
+@router.get("/{check_id}/alert-history", response_model=List[Dict[str, Any]])
+async def get_check_alert_history(
+    team_id: str,
+    check_id: str,
+    current_user: AuthUser,
+    db: Database,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> List[Dict[str, Any]]:
+    """List alert delivery history for a check, newest first."""
+    await check_team_access(team_id, current_user, db, Permission.VIEW)
+
+    check = await db.get_check(team_id, check_id)
+    if not check:
+        raise NotFoundError("Check not found")
+
+    deliveries = await db.list_alert_deliveries(team_id, check_id=check_id, limit=limit)
+    return [
+        {
+            "deliveryId": d.delivery_id,
+            "checkId": d.check_id,
+            "checkName": d.check_name,
+            "channelId": d.channel_id,
+            "channelType": d.channel_type,
+            "channelName": d.channel_name,
+            "alertType": d.alert_type,
+            "status": d.status,
+            "attempts": d.attempts,
+            "maxAttempts": d.max_attempts,
+            "lastError": d.last_error,
+            "createdAt": d.created_at,
+            "deliveredAt": d.delivered_at,
+        }
+        for d in deliveries
+    ]

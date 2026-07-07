@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from ..config import get_settings
 from ..models import (
     User, Team, TeamMember, Check, Ping, Role, CheckStatus,
-    PendingInvitation, AlertChannel, AlertChannelType, MaintenanceWindow, Report
+    PendingInvitation, AlertChannel, AlertChannelType, AlertDelivery, MaintenanceWindow, Report
 )
 from ..errors import PulsechecksError
 from ..utils import get_iso_timestamp, get_current_time_seconds
@@ -689,6 +689,85 @@ class FirestoreClient(DatabaseInterface):
         doc_ref = (self.db.collection('teams').document(team_id)
                    .collection('maintenance').document(window_id))
         await doc_ref.delete()
+
+    # Alert delivery queue / history operations
+
+    @staticmethod
+    def _dict_to_delivery(data: Dict[str, Any]) -> AlertDelivery:
+        return AlertDelivery(
+            delivery_id=data['deliveryId'],
+            team_id=data['teamId'],
+            check_id=data['checkId'],
+            check_name=data.get('checkName', ''),
+            channel_id=data['channelId'],
+            channel_type=data.get('channelType', ''),
+            channel_name=data.get('channelName', ''),
+            alert_type=data.get('alertType', 'late'),
+            status=data.get('status', 'pending'),
+            attempts=int(data.get('attempts', 0)),
+            max_attempts=int(data.get('maxAttempts', 5)),
+            next_attempt_at=int(data.get('nextAttemptAt', 0)),
+            last_error=data.get('lastError'),
+            created_at=data['createdAt'],
+            delivered_at=data.get('deliveredAt'),
+        )
+
+    async def create_alert_delivery(self, delivery: AlertDelivery) -> None:
+        """Persist a new alert delivery record."""
+        settings = get_settings()
+        ttl_seconds = get_current_time_seconds() + (settings.ping_retention_days * 24 * 60 * 60)
+        doc_ref = self.db.collection('alertDeliveries').document(delivery.delivery_id)
+        await doc_ref.set({
+            'deliveryId': delivery.delivery_id,
+            'teamId': delivery.team_id,
+            'checkId': delivery.check_id,
+            'checkName': delivery.check_name,
+            'channelId': delivery.channel_id,
+            'channelType': delivery.channel_type,
+            'channelName': delivery.channel_name,
+            'alertType': delivery.alert_type,
+            'status': delivery.status,
+            'attempts': delivery.attempts,
+            'maxAttempts': delivery.max_attempts,
+            'nextAttemptAt': delivery.next_attempt_at,
+            'lastError': delivery.last_error,
+            'createdAt': delivery.created_at,
+            'deliveredAt': delivery.delivered_at,
+            'ttl': datetime.fromtimestamp(ttl_seconds, tz=timezone.utc),
+        })
+
+    async def update_alert_delivery(self, delivery: AlertDelivery) -> None:
+        """Update an alert delivery's status/attempt fields."""
+        doc_ref = self.db.collection('alertDeliveries').document(delivery.delivery_id)
+        await doc_ref.update({
+            'status': delivery.status,
+            'attempts': delivery.attempts,
+            'nextAttemptAt': delivery.next_attempt_at,
+            'lastError': delivery.last_error,
+            'deliveredAt': delivery.delivered_at,
+        })
+
+    async def query_due_alert_deliveries(self, current_time_seconds: int, limit: int = 100) -> List[AlertDelivery]:
+        """Query pending deliveries whose next_attempt_at is due."""
+        query = (self.db.collection('alertDeliveries')
+                 .where('status', '==', 'pending')
+                 .where('nextAttemptAt', '<=', current_time_seconds)
+                 .limit(limit))
+        deliveries = []
+        async for doc in query.stream():
+            deliveries.append(self._dict_to_delivery(doc.to_dict()))
+        return deliveries
+
+    async def list_alert_deliveries(self, team_id: str, check_id: str | None = None, limit: int = 50) -> List[AlertDelivery]:
+        """List delivery history for a team (optionally one check), newest first."""
+        query = self.db.collection('alertDeliveries').where('teamId', '==', team_id)
+        if check_id:
+            query = query.where('checkId', '==', check_id)
+        query = query.order_by('createdAt', direction='DESCENDING').limit(limit)
+        deliveries = []
+        async for doc in query.stream():
+            deliveries.append(self._dict_to_delivery(doc.to_dict()))
+        return deliveries
 
     async def create_report(self, report: Report) -> None:
         """Persist a generated report record."""

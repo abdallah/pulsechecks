@@ -9,6 +9,7 @@ vi.mock('../lib/api', () => ({
   api: {
     listTeams: vi.fn(),
     createTeam: vi.fn(),
+    listChecks: vi.fn(),
   }
 }));
 
@@ -36,6 +37,7 @@ const mockUser = {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    api.listChecks.mockResolvedValue([]);
   });
 
   test('renders loading state initially', () => {
@@ -177,6 +179,41 @@ describe('DashboardPage', () => {
     fireEvent.click(screen.getByText('Cancel'));
     
     expect(screen.queryByText('Create Team')).not.toBeInTheDocument();
+  });
+
+  test('shows late-checks banner when a check is late', async () => {
+    api.listTeams.mockResolvedValue([
+      { teamId: 'team-1', name: 'SRE Team', role: 'admin', createdAt: '2023-01-01T00:00:00Z' }
+    ]);
+    api.listChecks.mockResolvedValue([
+      { checkId: 'check-1', teamId: 'team-1', name: 'Nightly Backup', status: 'late' },
+      { checkId: 'check-2', teamId: 'team-1', name: 'Hourly Sync', status: 'up' },
+    ]);
+
+    renderWithRouter(<DashboardPage user={mockUser} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('1 check is late')).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Nightly Backup/)).toBeInTheDocument();
+    // KPI tiles present
+    expect(screen.getByText('Up')).toBeInTheDocument();
+    expect(screen.getByText('Late')).toBeInTheDocument();
+  });
+
+  test('shows all-operational banner when no checks are late', async () => {
+    api.listTeams.mockResolvedValue([
+      { teamId: 'team-1', name: 'SRE Team', role: 'admin', createdAt: '2023-01-01T00:00:00Z' }
+    ]);
+    api.listChecks.mockResolvedValue([
+      { checkId: 'check-1', teamId: 'team-1', name: 'Nightly Backup', status: 'up' },
+    ]);
+
+    renderWithRouter(<DashboardPage user={mockUser} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/All systems operational/)).toBeInTheDocument();
+    });
   });
 
   test('switches between grid and list view', async () => {

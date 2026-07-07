@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Users, Grid3X3, List } from 'lucide-react'
+import { Plus, Users, Grid3X3, List, CheckCircle, AlertCircle, Clock, PauseCircle } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
@@ -9,28 +9,81 @@ export default function DashboardPage({ user, onLogout }) {
   const navigate = useNavigate()
   const toast = useToast()
   const [teams, setTeams] = useState([])
+  const [checksByTeam, setChecksByTeam] = useState(null) // null = not yet loaded
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showCreateTeam, setShowCreateTeam] = useState(false)
   const [newTeamName, setNewTeamName] = useState('')
   const [creating, setCreating] = useState(false)
-  const [viewMode, setViewMode] = useState('grid')
-  
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('dashboardViewMode') || 'grid')
+
   useEffect(() => {
     loadTeams()
+    const interval = setInterval(loadTeams, 60000) // Refresh fleet status every 60s
+    return () => clearInterval(interval)
   }, [])
-  
+
+  useEffect(() => {
+    localStorage.setItem('dashboardViewMode', viewMode)
+  }, [viewMode])
+
   async function loadTeams() {
     try {
       const data = await api.listTeams()
       // Backend returns array directly, not wrapped in {teams: [...]}
-      setTeams(Array.isArray(data) ? data : data.teams || [])
+      const loadedTeams = Array.isArray(data) ? data : data.teams || []
+      setTeams(loadedTeams)
       setError(null)
+      loadFleetStatus(loadedTeams)
     } catch {
       setError('Failed to load teams. Please try again.')
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadFleetStatus(loadedTeams) {
+    const results = await Promise.all(
+      loadedTeams.map(async (team) => {
+        try {
+          const data = await api.listChecks(team.teamId)
+          return [team.teamId, Array.isArray(data) ? data : data.checks || []]
+        } catch {
+          return [team.teamId, null] // null = failed to load, distinct from empty
+        }
+      })
+    )
+    setChecksByTeam(Object.fromEntries(results))
+  }
+
+  const fleet = (() => {
+    if (!checksByTeam) return null
+    const summary = { up: 0, late: 0, pending: 0, paused: 0, total: 0, lateChecks: [] }
+    for (const team of teams) {
+      const checks = checksByTeam[team.teamId]
+      if (!checks) continue
+      for (const check of checks) {
+        summary.total++
+        if (check.status === 'late') {
+          summary.late++
+          summary.lateChecks.push({ ...check, teamName: team.name })
+        } else if (check.status === 'paused') {
+          summary.paused++
+        } else if (check.status === 'pending') {
+          summary.pending++
+        } else {
+          summary.up++
+        }
+      }
+    }
+    return summary
+  })()
+
+  function teamStatusSummary(teamId) {
+    const checks = checksByTeam?.[teamId]
+    if (!checks) return null
+    const late = checks.filter(c => c.status === 'late').length
+    return { total: checks.length, late }
   }
   
   async function handleCreateTeam(e) {
@@ -54,6 +107,61 @@ export default function DashboardPage({ user, onLogout }) {
   return (
     <Layout user={user} onLogout={onLogout}>
       <div className="space-y-6">
+        {/* Fleet status — answers "is anything down right now?" */}
+        {fleet && fleet.total > 0 && (
+          <div className="space-y-4">
+            {fleet.lateChecks.length > 0 ? (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <AlertCircle className="h-5 w-5 text-red-500 mr-2" aria-hidden="true" />
+                  <h2 className="text-sm font-semibold text-red-800">
+                    {fleet.lateChecks.length} {fleet.lateChecks.length === 1 ? 'check is' : 'checks are'} late
+                  </h2>
+                </div>
+                <ul className="space-y-1">
+                  {fleet.lateChecks.slice(0, 10).map((check) => (
+                    <li key={check.checkId}>
+                      <button
+                        onClick={() => navigate(`/teams/${check.teamId}/checks/${check.checkId}`)}
+                        className="text-sm text-red-700 hover:text-red-900 hover:underline"
+                      >
+                        {check.name} <span className="text-red-500">— {check.teamName}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {fleet.lateChecks.length > 10 && (
+                    <li className="text-sm text-red-500">…and {fleet.lateChecks.length - 10} more</li>
+                  )}
+                </ul>
+              </div>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 flex items-center">
+                <CheckCircle className="h-5 w-5 text-green-500 mr-2" aria-hidden="true" />
+                <p className="text-sm font-medium text-green-800">
+                  All systems operational — {fleet.up} {fleet.up === 1 ? 'check' : 'checks'} up
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {[
+                { label: 'Up', count: fleet.up, Icon: CheckCircle, iconColor: 'text-green-500' },
+                { label: 'Late', count: fleet.late, Icon: AlertCircle, iconColor: 'text-red-500' },
+                { label: 'Pending', count: fleet.pending, Icon: Clock, iconColor: 'text-amber-500' },
+                { label: 'Paused', count: fleet.paused, Icon: PauseCircle, iconColor: 'text-gray-400' },
+              ].map(({ label, count, Icon, iconColor }) => (
+                <div key={label} className="bg-white shadow rounded-lg px-4 py-3 flex items-center">
+                  <Icon className={`h-6 w-6 ${iconColor} mr-3 flex-shrink-0`} aria-hidden="true" />
+                  <div>
+                    <p className="text-2xl font-semibold text-gray-900">{count}</p>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">Your Teams</h1>
           <div className="flex items-center space-x-3">
@@ -190,6 +298,21 @@ export default function DashboardPage({ user, onLogout }) {
                         </dl>
                       </div>
                     </div>
+                    {(() => {
+                      const status = teamStatusSummary(team.teamId)
+                      if (!status) return null
+                      return (
+                        <p className="mt-2 text-sm">
+                          <span className="text-gray-500">{status.total} {status.total === 1 ? 'check' : 'checks'}</span>
+                          {status.late > 0 && (
+                            <span className="ml-2 inline-flex items-center font-medium text-red-700">
+                              <AlertCircle className="h-4 w-4 mr-1" aria-hidden="true" />
+                              {status.late} late
+                            </span>
+                          )}
+                        </p>
+                      )
+                    })()}
                     <div className="mt-4 flex items-center justify-between">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {team.role}
@@ -224,6 +347,21 @@ export default function DashboardPage({ user, onLogout }) {
                         <div className="flex items-center space-x-3">
                           <Users className="h-5 w-5 text-gray-400" />
                           <p className="text-sm font-medium text-blue-600 truncate">{team.name}</p>
+                          {(() => {
+                            const status = teamStatusSummary(team.teamId)
+                            if (!status) return null
+                            return (
+                              <span className="text-sm text-gray-500">
+                                {status.total} {status.total === 1 ? 'check' : 'checks'}
+                                {status.late > 0 && (
+                                  <span className="ml-2 inline-flex items-center font-medium text-red-700">
+                                    <AlertCircle className="h-4 w-4 mr-1" aria-hidden="true" />
+                                    {status.late} late
+                                  </span>
+                                )}
+                              </span>
+                            )
+                          })()}
                         </div>
                         <div className="flex items-center space-x-3">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">

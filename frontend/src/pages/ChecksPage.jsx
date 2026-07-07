@@ -196,6 +196,22 @@ export default function ChecksPage({ user, onLogout }) {
     }
   }
 
+  async function handleBulkResume() {
+    if (selectedChecks.size === 0) return
+
+    setBulkActionLoading(true)
+    try {
+      const response = await api.bulkResumeChecks(teamId, Array.from(selectedChecks))
+      toast.success(response.message || 'Checks resumed successfully')
+      setSelectedChecks(new Set())
+      loadChecks()
+    } catch (error) {
+      toast.error('Failed to resume checks: ' + error.message)
+    } finally {
+      setBulkActionLoading(false)
+    }
+  }
+
   async function handleToggleCheckStatus(checkId, currentStatus) {
     setActionLoading(checkId)
     try {

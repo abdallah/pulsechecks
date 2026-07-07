@@ -170,6 +170,7 @@ The Cloud Run service will be configured with these environment variables (set a
 - `FIREBASE_PROJECT_ID=your-project-id`
 - `ALLOWED_EMAIL_DOMAINS=example.com`
 - `DEBUG=false`
+- `PING_RETENTION_DAYS=90` (optional — how long ping history is kept; default 90)
 
 ### Frontend Environment Variables
 

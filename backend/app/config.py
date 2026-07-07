@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     project_name: str = "pulsechecks"
     environment: str = "production"
     debug: bool = False
+    ping_retention_days: int = 90
     frontend_url: str = "https://pulsechecks.example.com"
 
     # PostHog

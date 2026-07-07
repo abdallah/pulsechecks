@@ -23,6 +23,17 @@ from ..config import get_settings
 
 router = APIRouter(prefix="/ping", tags=["ping"])
 
+# Ping payloads are written by an unauthenticated endpoint; cap them so a
+# flood of large bodies can't inflate storage costs (DynamoDB items are
+# hard-limited to 400 KB anyway).
+MAX_PING_DATA_BYTES = 100 * 1024
+
+
+def _truncate_ping_data(data: Optional[str]) -> Optional[str]:
+    if data and len(data.encode("utf-8", errors="ignore")) > MAX_PING_DATA_BYTES:
+        return data.encode("utf-8", errors="ignore")[:MAX_PING_DATA_BYTES].decode("utf-8", errors="ignore")
+    return data
+
 
 async def _record_ping_internal(
     token: str,
@@ -33,6 +44,7 @@ async def _record_ping_internal(
     response_time_ms: Optional[int] = None,
 ) -> OkResponse:
     """Internal helper to record a ping."""
+    data = _truncate_ping_data(data)
     metrics = get_metrics_client()
 
     # Look up check by token
@@ -282,7 +294,7 @@ async def record_ping_two_segment(
         received_at=timestamp,
         ping_type=PingType.FAIL.value,
         code=second,
-        data=data,
+        data=_truncate_ping_data(data),
     )
     await db.create_ping(ping)
 
@@ -397,7 +409,7 @@ async def record_ping_by_slug_with_action(
         received_at=timestamp,
         ping_type=PingType.FAIL.value,
         code=action,
-        data=data,
+        data=_truncate_ping_data(data),
     )
     await db.create_ping(ping)
 

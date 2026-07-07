@@ -31,24 +31,16 @@ CLOUD_PROVIDER=gcp ./deploy.sh   # Deploy to GCP
 curl https://api.pulsechecks.example.com/ping/{your-token}
 ```
 
-## CI/CD Options
+## CI/CD
 
-Pulsechecks includes ready-to-use CI/CD pipelines for both GitHub Actions and GitLab CI:
-
-- **GitHub Actions**: See [.github/workflows/README.md](.github/workflows/README.md)
+- **GitHub Actions** (testing and releases): See [.github/workflows/README.md](.github/workflows/README.md)
   - `test.yml` - Automated testing on PRs
-  - `aws-deploy.yml` - AWS deployment pipeline
-  - `gcp-deploy.yml` - GCP deployment pipeline
+  - Terraform provider releases are built via goreleaser (see `terraform-provider/`)
 
-- **GitLab CI**: See `.gitlab-ci.yml`
+- **GitLab CI** (production deployments): See `.gitlab-ci.yml`
   - Tests, builds, and deployments for both clouds
   - Controlled via `DEPLOY_TARGET` variable
-
-Both systems support:
-- ✅ Automated testing with coverage
-- ✅ Multi-cloud deployment
-- ✅ Manual workflow triggers
-- ✅ OIDC authentication (no long-lived credentials)
+  - OIDC authentication (no long-lived credentials)
 
 ## Cloud Platform Comparison
 

@@ -14,7 +14,8 @@ resource "google_firestore_database" "pulsechecks" {
   depends_on = [google_project_service.required_apis]
 }
 
-# TTL Policy for ping events (30 days)
+# TTL Policy for ping events (expiry timestamp is set per-document by the
+# backend from PING_RETENTION_DAYS, default 90 days)
 resource "google_firestore_field" "ping_ttl" {
   project    = var.gcp_project_id
   database   = google_firestore_database.pulsechecks.name

@@ -66,6 +66,33 @@ resource "google_cloud_run_service" "pulsechecks_api" {
           value = "https://${var.domain_name}"
         }
 
+        # SMTP for email alert channels (optional — email channels are
+        # unavailable until these are set)
+        env {
+          name  = "SMTP_HOST"
+          value = var.smtp_host
+        }
+
+        env {
+          name  = "SMTP_PORT"
+          value = var.smtp_port
+        }
+
+        env {
+          name  = "SMTP_USERNAME"
+          value = var.smtp_username
+        }
+
+        env {
+          name  = "SMTP_PASSWORD"
+          value = var.smtp_password
+        }
+
+        env {
+          name  = "SMTP_FROM"
+          value = var.smtp_from
+        }
+
         # Port
         ports {
           container_port = 8080

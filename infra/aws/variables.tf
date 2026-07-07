@@ -66,3 +66,36 @@ variable "domain_name" {
   default     = "pulsechecks.example.com"
 }
 
+
+# SMTP settings for email alert channels (optional). Leave empty to
+# disable email channels on this deployment.
+variable "smtp_host" {
+  description = "SMTP server hostname for email alert channels"
+  type        = string
+  default     = ""
+}
+
+variable "smtp_port" {
+  description = "SMTP server port"
+  type        = string
+  default     = "587"
+}
+
+variable "smtp_username" {
+  description = "SMTP username"
+  type        = string
+  default     = ""
+}
+
+variable "smtp_password" {
+  description = "SMTP password"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "smtp_from" {
+  description = "From address for alert emails, e.g. 'PulseChecks <alerts@example.com>'"
+  type        = string
+  default     = ""
+}

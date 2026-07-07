@@ -57,3 +57,4 @@ class AlertChannelType(str, Enum):
     MATTERMOST = "mattermost"
     WEBHOOK = "webhook"
     TELEGRAM = "telegram"
+    EMAIL = "email"

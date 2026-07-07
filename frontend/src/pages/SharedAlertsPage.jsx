@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Bell, Users, MessageSquare, Send, Plus, Settings, Trash2, Webhook } from 'lucide-react'
+import { ArrowLeft, Bell, Users, MessageSquare, Send, Plus, Settings, Trash2, Webhook, Mail } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { config } from '../config'
 
 const ALL_CHANNEL_TYPES = [
@@ -11,6 +12,7 @@ const ALL_CHANNEL_TYPES = [
   { value: 'mattermost', label: 'Mattermost' },
   { value: 'webhook', label: 'Webhook' },
   { value: 'telegram', label: 'Telegram' },
+  { value: 'email', label: 'Email' },
 ]
 
 const CHANNEL_TYPES = ALL_CHANNEL_TYPES.filter(
@@ -25,6 +27,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [showAddChannel, setShowAddChannel] = useState(false)
   const [editingChannel, setEditingChannel] = useState(null)
+  const [confirmState, setConfirmState] = useState(null)
   const [newChannel, setNewChannel] = useState({
     name: '',
     displayName: '',
@@ -96,16 +99,22 @@ export default function SharedAlertsPage({ user, onLogout }) {
     }
   }
 
-  async function handleDeleteChannel(channel) {
-    if (!confirm(`Are you sure you want to delete "${channel.displayName}"?`)) return
-
-    try {
-      await api.deleteAlertChannel(channel.teamId, channel.channelId)
-      toast.success('Channel deleted successfully')
-      loadSharedChannels()
-    } catch (error) {
-      toast.error('Failed to delete channel: ' + error.message)
-    }
+  function handleDeleteChannel(channel) {
+    setConfirmState({
+      title: 'Delete Shared Channel',
+      message: `Are you sure you want to delete "${channel.displayName}"? Checks in all teams using it will stop sending notifications through it.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.deleteAlertChannel(channel.teamId, channel.channelId)
+          toast.success('Channel deleted successfully')
+          loadSharedChannels()
+        } catch (error) {
+          toast.error('Failed to delete channel: ' + error.message)
+        }
+      },
+    })
   }
 
   async function handleUpdateChannel(e) {
@@ -279,6 +288,24 @@ export default function SharedAlertsPage({ user, onLogout }) {
                   </div>
                 )}
 
+                {newChannel.type === 'email' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Recipients</label>
+                    <input
+                      type="text"
+                      value={(newChannel.configuration.recipients || []).join(', ')}
+                      onChange={(e) => setNewChannel(prev => ({
+                        ...prev,
+                        configuration: { recipients: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }
+                      }))}
+                      placeholder="oncall@example.com, sre-team@example.com"
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Comma-separated, up to 20 addresses.</p>
+                  </div>
+                )}
+
                 {newChannel.type === 'sns' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700">SNS Topic ARN</label>
@@ -336,6 +363,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
                         {channel.type === 'mattermost' && <MessageSquare className="h-8 w-8 text-purple-500" />}
                         {channel.type === 'webhook' && <Webhook className="h-8 w-8 text-indigo-500" />}
                         {channel.type === 'telegram' && <Send className="h-8 w-8 text-sky-500" />}
+                        {channel.type === 'email' && <Mail className="h-8 w-8 text-amber-500" />}
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
@@ -433,6 +461,23 @@ export default function SharedAlertsPage({ user, onLogout }) {
                     </div>
                   )}
 
+                  {editingChannel.type === 'email' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Recipients</label>
+                      <input
+                        type="text"
+                        value={(editingChannel.configuration?.recipients || []).join(', ')}
+                        onChange={(e) => setEditingChannel({
+                          ...editingChannel,
+                          configuration: { ...editingChannel.configuration, recipients: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }
+                        })}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        required
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Comma-separated, up to 20 addresses.</p>
+                    </div>
+                  )}
+
                   <div className="flex space-x-3">
                     <button
                       type="submit"
@@ -454,6 +499,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
           </div>
         )}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </Layout>
   )
 }

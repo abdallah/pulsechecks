@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook, PlayCircle } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook, PlayCircle, Mail } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { config } from '../config'
 
 const ALL_CHANNEL_TYPES = {
   sns: { name: 'SNS Topic', icon: Bell, color: 'blue' },
   mattermost: { name: 'Mattermost', icon: MessageSquare, color: 'purple' },
   webhook: { name: 'Webhook', icon: Webhook, color: 'indigo' },
-  telegram: { name: 'Telegram', icon: Send, color: 'sky' }
+  telegram: { name: 'Telegram', icon: Send, color: 'sky' },
+  email: { name: 'Email', icon: Mail, color: 'amber' }
 }
 
 // Filter channel types based on cloud provider
@@ -33,6 +35,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [testingChannel, setTestingChannel] = useState(null)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
+  const [confirmState, setConfirmState] = useState(null)
   const [newChannel, setNewChannel] = useState({
     name: '',
     displayName: '',
@@ -75,15 +78,22 @@ export default function AlertChannelsPage({ user, onLogout }) {
     }
   }
 
-  async function handleDeleteChannel(channelId) {
-    if (!confirm('Are you sure you want to delete this alert channel?')) return
-
-    try {
-      await api.deleteAlertChannel(teamId, channelId)
-      loadChannels()
-    } catch (error) {
-      toast.error('Failed to delete channel: ' + error.message)
-    }
+  function handleDeleteChannel(channelId) {
+    setConfirmState({
+      title: 'Delete Alert Channel',
+      message: 'Are you sure you want to delete this alert channel? Checks using it will stop sending notifications through it.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.deleteAlertChannel(teamId, channelId)
+          toast.success('Alert channel deleted')
+          loadChannels()
+        } catch (error) {
+          toast.error('Failed to delete channel: ' + error.message)
+        }
+      },
+    })
   }
 
   async function handleTestChannel(channelId) {
@@ -155,6 +165,24 @@ export default function AlertChannelsPage({ user, onLogout }) {
             className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             required
           />
+        </div>
+      )
+    }
+
+    if (type === 'email') {
+      return (
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Recipients</label>
+          <input
+            type="text"
+            value={(newChannel.configuration.recipients || []).join(', ')}
+            onChange={(e) => handleConfigurationChange('recipients',
+              e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+            placeholder="oncall@example.com, sre-team@example.com"
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+          <p className="mt-1 text-xs text-gray-500">Comma-separated, up to 20 addresses.</p>
         </div>
       )
     }
@@ -377,6 +405,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
           </div>
         )}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </Layout>
   )
 }

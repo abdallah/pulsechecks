@@ -4,6 +4,7 @@ import { ArrowLeft, Users, Plus, Trash2, Shield, Bell, Webhook, Settings, X, Mes
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 function toDateTimeLocalValue(date) {
   const offsetMilliseconds = date.getTimezoneOffset() * 60000
@@ -34,9 +35,6 @@ export default function TeamSettingsPage({ user, onLogout }) {
   const [testingChannel, setTestingChannel] = useState(null)
   const [showAddMember, setShowAddMember] = useState(false)
   const [showAddAlert, setShowAddAlert] = useState(false)
-  const [showTopicDetails, setShowTopicDetails] = useState(false)
-  const [selectedTopic, setSelectedTopic] = useState(null)
-  const [topicDetails, setTopicDetails] = useState(null)
   const [newMemberEmail, setNewMemberEmail] = useState('')
   const [newMemberRole, setNewMemberRole] = useState('member')
   const [newAlertName, setNewAlertName] = useState('')
@@ -46,13 +44,12 @@ export default function TeamSettingsPage({ user, onLogout }) {
   const [newChannelConfig, setNewChannelConfig] = useState({})
   const [channels, setChannels] = useState([])
   const [editingChannel, setEditingChannel] = useState(null)
-  const [newSubscriptionProtocol, setNewSubscriptionProtocol] = useState('email')
-  const [newSubscriptionEndpoint, setNewSubscriptionEndpoint] = useState('')
   const [mattermostWebhook, setMattermostWebhook] = useState('')
   const [mattermostLoading, setMattermostLoading] = useState(false)
   const [mattermostWebhooks, setMattermostWebhooks] = useState([])
   const [newWebhookUrl, setNewWebhookUrl] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [confirmState, setConfirmState] = useState(null)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [apiTokens, setApiTokens] = useState([])
@@ -113,36 +110,52 @@ export default function TeamSettingsPage({ user, onLogout }) {
     if (!newMemberEmail.trim()) return
 
     try {
-      await api.addTeamMember(teamId, newMemberEmail.trim(), newMemberRole)
+      const invitedEmail = newMemberEmail.trim()
+      await api.addTeamMember(teamId, invitedEmail, newMemberRole)
       setNewMemberEmail('')
       setNewMemberRole('member')
       setShowAddMember(false)
+      toast.success(`Invitation sent to ${invitedEmail}`)
       loadMembers()
     } catch (error) {
-      alert('Failed to add member: ' + error.message)
+      toast.error('Failed to add member: ' + error.message)
     }
   }
 
-  async function handleRemoveMember(userId) {
-    if (!confirm('Are you sure you want to remove this member?')) return
-
-    try {
-      await api.removeTeamMember(teamId, userId)
-      loadMembers()
-    } catch (error) {
-      alert('Failed to remove member: ' + error.message)
-    }
+  function handleRemoveMember(userId) {
+    setConfirmState({
+      title: 'Remove Member',
+      message: 'Are you sure you want to remove this member from the team?',
+      confirmLabel: 'Remove',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.removeTeamMember(teamId, userId)
+          toast.success('Member removed')
+          loadMembers()
+        } catch (error) {
+          toast.error('Failed to remove member: ' + error.message)
+        }
+      },
+    })
   }
 
-  async function handleDeleteInvitation(email) {
-    if (!confirm('Are you sure you want to delete this invitation?')) return
-
-    try {
-      await api.deleteTeamInvitation(teamId, email)
-      loadMembers()
-    } catch (error) {
-      alert('Failed to delete invitation: ' + error.message)
-    }
+  function handleDeleteInvitation(email) {
+    setConfirmState({
+      title: 'Delete Invitation',
+      message: `Delete the pending invitation for ${email}?`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.deleteTeamInvitation(teamId, email)
+          toast.success('Invitation deleted')
+          loadMembers()
+        } catch (error) {
+          toast.error('Failed to delete invitation: ' + error.message)
+        }
+      },
+    })
   }
 
   async function loadMattermostWebhook() {
@@ -157,9 +170,9 @@ export default function TeamSettingsPage({ user, onLogout }) {
     setMattermostLoading(true)
     try {
       await api.updateTeamMattermostWebhook(teamId, mattermostWebhook)
-      alert('Mattermost webhook updated successfully!')
+      toast.success('Mattermost webhook updated successfully')
     } catch (error) {
-      alert('Failed to update Mattermost webhook: ' + error.message)
+      toast.error('Failed to update Mattermost webhook: ' + error.message)
     } finally {
       setMattermostLoading(false)
     }
@@ -179,21 +192,29 @@ export default function TeamSettingsPage({ user, onLogout }) {
     try {
       await api.addTeamMattermostWebhook(teamId, newWebhookUrl.trim())
       setNewWebhookUrl('')
+      toast.success('Webhook added')
       loadMattermostWebhooks()
     } catch (error) {
-      alert('Failed to add webhook: ' + error.message)
+      toast.error('Failed to add webhook: ' + error.message)
     }
   }
 
-  async function handleRemoveWebhook(webhookUrl) {
-    if (!confirm('Are you sure you want to remove this webhook?')) return
-
-    try {
-      await api.removeTeamMattermostWebhook(teamId, webhookUrl)
-      loadMattermostWebhooks()
-    } catch (error) {
-      alert('Failed to remove webhook: ' + error.message)
-    }
+  function handleRemoveWebhook(webhookUrl) {
+    setConfirmState({
+      title: 'Remove Webhook',
+      message: 'Are you sure you want to remove this webhook?',
+      confirmLabel: 'Remove',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.removeTeamMattermostWebhook(teamId, webhookUrl)
+          toast.success('Webhook removed')
+          loadMattermostWebhooks()
+        } catch (error) {
+          toast.error('Failed to remove webhook: ' + error.message)
+        }
+      },
+    })
   }
 
   async function handleRoleChange(userId, newRole) {
@@ -201,7 +222,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
       await api.updateTeamMemberRole(teamId, userId, newRole)
       loadMembers()
     } catch (error) {
-      alert('Failed to update role: ' + error.message)
+      toast.error('Failed to update role: ' + error.message)
     }
   }
 
@@ -225,9 +246,10 @@ export default function TeamSettingsPage({ user, onLogout }) {
       setNewChannelConfig({})
       setNewAlertShared(false)
       setShowAddAlert(false)
+      toast.success('Alert channel created')
       loadChannels()
     } catch (error) {
-      alert('Failed to create channel: ' + error.message)
+      toast.error('Failed to create channel: ' + error.message)
     }
   }
 
@@ -306,15 +328,22 @@ export default function TeamSettingsPage({ user, onLogout }) {
     }
   }
 
-  async function handleDeleteReport(reportId) {
-    if (!confirm('Delete this generated report?')) return
-    try {
-      await api.deleteReport(teamId, reportId)
-      toast.success('Report deleted')
-      loadReports()
-    } catch (error) {
-      toast.error('Failed to delete report: ' + error.message)
-    }
+  function handleDeleteReport(reportId) {
+    setConfirmState({
+      title: 'Delete Report',
+      message: 'Delete this generated report? The download link will stop working.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.deleteReport(teamId, reportId)
+          toast.success('Report deleted')
+          loadReports()
+        } catch (error) {
+          toast.error('Failed to delete report: ' + error.message)
+        }
+      },
+    })
   }
 
   async function handleCreateToken(e) {
@@ -327,29 +356,44 @@ export default function TeamSettingsPage({ user, onLogout }) {
       setShowCreateToken(false)
       loadApiTokens()
     } catch (error) {
-      alert('Failed to create token: ' + error.message)
+      toast.error('Failed to create token: ' + error.message)
     }
   }
 
-  async function handleRevokeToken(tokenId) {
-    if (!confirm('Revoke this token? Any scripts using it will stop working.')) return
-    try {
-      await api.revokeApiToken(teamId, tokenId)
-      loadApiTokens()
-    } catch (error) {
-      alert('Failed to revoke token: ' + error.message)
-    }
+  function handleRevokeToken(tokenId) {
+    setConfirmState({
+      title: 'Revoke API Token',
+      message: 'Revoke this token? Any scripts using it will stop working immediately.',
+      confirmLabel: 'Revoke',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.revokeApiToken(teamId, tokenId)
+          toast.success('Token revoked')
+          loadApiTokens()
+        } catch (error) {
+          toast.error('Failed to revoke token: ' + error.message)
+        }
+      },
+    })
   }
 
-  async function handleDeleteChannel(channelId) {
-    if (!confirm('Are you sure you want to delete this alert channel?')) return
-
-    try {
-      await api.deleteAlertChannel(teamId, channelId)
-      loadChannels()
-    } catch (error) {
-      alert('Failed to delete channel: ' + error.message)
-    }
+  function handleDeleteChannel(channelId) {
+    setConfirmState({
+      title: 'Delete Alert Channel',
+      message: 'Are you sure you want to delete this alert channel? Checks using it will stop sending notifications through it.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.deleteAlertChannel(teamId, channelId)
+          toast.success('Alert channel deleted')
+          loadChannels()
+        } catch (error) {
+          toast.error('Failed to delete channel: ' + error.message)
+        }
+      },
+    })
   }
 
   async function handleTestChannel(channelId) {
@@ -407,6 +451,23 @@ export default function TeamSettingsPage({ user, onLogout }) {
       )
     }
 
+    if (newChannelType === 'email') {
+      return (
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Recipients</label>
+          <input
+            type="text"
+            value={(newChannelConfig.recipients || []).join(', ')}
+            onChange={(e) => setNewChannelConfig({ recipients: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+            placeholder="oncall@example.com, sre-team@example.com"
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+          <p className="mt-1 text-xs text-gray-500">Comma-separated, up to 20 addresses.</p>
+        </div>
+      )
+    }
+
     if (newChannelType === 'telegram') {
       return (
         <div className="space-y-4">
@@ -451,9 +512,10 @@ export default function TeamSettingsPage({ user, onLogout }) {
 
       await api.updateAlertChannel(teamId, editingChannel.channelId, updateData)
       setEditingChannel(null)
+      toast.success('Channel updated')
       loadChannels()
     } catch (error) {
-      alert('Failed to update channel: ' + error.message)
+      toast.error('Failed to update channel: ' + error.message)
     }
   }
 
@@ -496,6 +558,25 @@ export default function TeamSettingsPage({ user, onLogout }) {
       )
     }
 
+    if (editingChannel.type === 'email') {
+      return (
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Recipients</label>
+          <input
+            type="text"
+            value={(editingChannel.configuration?.recipients || []).join(', ')}
+            onChange={(e) => setEditingChannel({
+              ...editingChannel,
+              configuration: { ...editingChannel.configuration, recipients: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }
+            })}
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+          <p className="mt-1 text-xs text-gray-500">Comma-separated, up to 20 addresses.</p>
+        </div>
+      )
+    }
+
     if (editingChannel.type === 'telegram') {
       return (
         <div className="space-y-4">
@@ -532,71 +613,19 @@ export default function TeamSettingsPage({ user, onLogout }) {
     return null
   }
 
-  async function handleDeleteAlert(topicArn) {
-    // Legacy alert topics are no longer supported
-    alert('Alert topics have been replaced with alert channels. Please use the Channels page to manage notifications.')
-  }
-
-  async function handleShowTopicDetails(topic) {
-    setSelectedTopic(topic)
-    setShowTopicDetails(true)
-    try {
-      const topicArn = topic.topicArn || topic.topic_arn
-      if (!topicArn) {
-        alert('Topic ARN not found.')
-        return
-      }
-      const details = await api.getAlertTopicDetails(teamId, topicArn)
-      setTopicDetails(details)
-    } catch {
-      setTopicDetails(null)
-    }
-  }
-
-  async function handleSubscribe(e) {
-    e.preventDefault()
-    if (!selectedTopic || !newSubscriptionEndpoint.trim()) return
-
-    try {
-      const topicArn = selectedTopic.topicArn || selectedTopic.topic_arn
-      // Legacy subscription functionality no longer supported
-      alert('Alert topic subscriptions have been replaced with alert channels. Please use the Channels page to manage notifications.')
-      setNewSubscriptionEndpoint('')
-      alert('Subscription created! Check your email/endpoint for confirmation.')
-      // Reload topic details
-      handleShowTopicDetails(selectedTopic)
-    } catch (error) {
-      alert('Failed to subscribe: ' + error.message)
-    }
-  }
-
-  async function handleUnsubscribe(subscriptionArn) {
-    if (!confirm('Are you sure you want to unsubscribe?')) return
-
-    try {
-      const topicArn = selectedTopic.topicArn || selectedTopic.topic_arn
-      await api.unsubscribeFromAlertTopic(teamId, topicArn, subscriptionArn)
-      alert('Unsubscribed successfully!')
-      // Reload topic details
-      handleShowTopicDetails(selectedTopic)
-    } catch (error) {
-      alert('Failed to unsubscribe: ' + error.message)
-    }
-  }
-
   async function handleDeleteTeam() {
     if (deleteConfirmText !== team?.name) {
-      alert('Please type the team name exactly to confirm deletion')
+      toast.error('Please type the team name exactly to confirm deletion')
       return
     }
 
     setDeleteLoading(true)
     try {
       await api.deleteTeam(teamId, team.name)
-      alert(`Team "${team.name}" has been permanently deleted`)
+      toast.success(`Team "${team.name}" has been permanently deleted`)
       navigate('/')
     } catch (error) {
-      alert('Failed to delete team: ' + error.message)
+      toast.error('Failed to delete team: ' + error.message)
     } finally {
       setDeleteLoading(false)
     }
@@ -901,6 +930,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
                       <option value="mattermost">Mattermost</option>
                       <option value="webhook">Webhook</option>
                       <option value="telegram">Telegram</option>
+                      <option value="email">Email</option>
                     </select>
                   </div>
 
@@ -1390,6 +1420,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
           </div>
         )}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </Layout>
   )
 }

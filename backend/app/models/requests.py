@@ -123,12 +123,12 @@ class UpdateCheckRequest(BaseModel):
     failure_threshold: Optional[int] = Field(None, ge=1, le=100, alias="failureThreshold", description="Alert after N consecutive failures")
 
     # Escalation configuration
-    escalation_minutes: Optional[int] = Field(None, ge=1, le=1440, alias="escalationMinutes", description="Minutes before escalating")
+    escalation_minutes: Optional[int] = Field(None, ge=0, le=1440, alias="escalationMinutes", description="Minutes before escalating (0 disables escalation)")
     escalation_alert_channels: Optional[list[str]] = Field(None, alias="escalationAlertChannels", description="Alert channels for escalated alerts")
 
     # Suppression configuration
-    suppress_after_count: Optional[int] = Field(None, ge=1, le=100, alias="suppressAfterCount", description="Suppress after N consecutive alerts")
-    suppress_duration_minutes: Optional[int] = Field(None, ge=1, le=10080, alias="suppressDurationMinutes", description="Suppress for N minutes")
+    suppress_after_count: Optional[int] = Field(None, ge=0, le=100, alias="suppressAfterCount", description="Suppress after N consecutive alerts (0 disables)")
+    suppress_duration_minutes: Optional[int] = Field(None, ge=0, le=10080, alias="suppressDurationMinutes", description="Suppress for N minutes (0 disables)")
     tags: Optional[list[str]] = Field(None, max_length=10, description="Up to 10 labels for filtering/grouping")
 
     @field_validator("tags")

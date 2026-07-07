@@ -566,15 +566,16 @@ async def update_check(
     if request.alert_channels is not None:
         updates["alertChannels"] = request.alert_channels
     if request.escalation_minutes is not None:
-        updates["escalationMinutes"] = request.escalation_minutes
+        # 0 disables escalation
+        updates["escalationMinutes"] = request.escalation_minutes or None
     if request.escalation_alert_channels is not None:
         updates["escalationAlertChannels"] = request.escalation_alert_channels
     if request.tags is not None:
         updates["tags"] = request.tags
     if request.suppress_after_count is not None:
-        updates["suppressAfterCount"] = request.suppress_after_count
+        updates["suppressAfterCount"] = request.suppress_after_count or None
     if request.suppress_duration_minutes is not None:
-        updates["suppressDurationMinutes"] = request.suppress_duration_minutes
+        updates["suppressDurationMinutes"] = request.suppress_duration_minutes or None
     if request.url is not None:
         updates["url"] = request.url
     if request.expected_status_code is not None:

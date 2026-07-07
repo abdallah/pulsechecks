@@ -11,6 +11,7 @@ from ..utils import get_iso_timestamp
 from ..config import get_settings
 from ..ssrf_utils import validate_webhook_url_strict, SSRFValidationError
 from ..posthog_client import get_posthog_client, new_context, identify_context
+from ..audit import record_audit
 
 router = APIRouter(prefix="/teams/{team_id}/channels", tags=["alert-channels"])
 
@@ -98,6 +99,7 @@ async def create_alert_channel(
     )
     
     await db.create_alert_channel(channel)
+    await record_audit(db, team_id, current_user, "channel.created", "channel", channel_id, display_name, detail=f"type: {alert_type.value}")
 
     posthog = get_posthog_client()
     with new_context(client=posthog):
@@ -183,7 +185,8 @@ async def update_alert_channel(
         channel.shared = request["shared"]
     
     await db.update_alert_channel(channel)
-    
+    await record_audit(db, team_id, current_user, "channel.updated", "channel", channel_id, channel.display_name)
+
     return {
         "channelId": channel.channel_id,
         "teamId": channel.team_id,
@@ -225,6 +228,7 @@ async def delete_alert_channel(
             print(f"Warning: Failed to delete SNS topic {topic_arn}: {e}")
     
     await db.delete_alert_channel(team_id, channel_id)
+    await record_audit(db, team_id, current_user, "channel.deleted", "channel", channel_id, channel.display_name, detail=f"type: {channel.type.value}")
 
     posthog = get_posthog_client()
     with new_context(client=posthog):

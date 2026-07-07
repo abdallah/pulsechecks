@@ -95,6 +95,7 @@ class Check(BaseModel):
     # Escalation configuration
     escalation_minutes: Optional[int] = None  # Minutes before escalating
     escalation_alert_channels: list[str] = []  # Alert channels for escalated alerts
+    tags: list[str] = []  # Free-form labels for filtering/grouping
     escalation_mattermost_channels: list[str] = []  # Mattermost channels for escalated alerts (legacy)
     escalation_triggered_at: Optional[str] = None  # When escalation was last triggered
 
@@ -139,6 +140,21 @@ class AlertDelivery(BaseModel):
     last_error: Optional[str] = None
     created_at: str
     delivered_at: Optional[str] = None
+
+
+class AuditEvent(BaseModel):
+    """A recorded administrative action (who did what, to what, when)."""
+
+    event_id: str
+    team_id: str
+    actor_id: str
+    actor_email: str
+    action: str  # e.g. check.created, channel.deleted, member.role_changed
+    target_type: str  # check | channel | member | team | token | maintenance
+    target_id: str
+    target_name: Optional[str] = None
+    detail: Optional[str] = None
+    created_at: str
 
 
 class MaintenanceWindow(BaseModel):

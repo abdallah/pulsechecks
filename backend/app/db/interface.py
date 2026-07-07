@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 
 from ..models import (
     User, Team, TeamMember, Check, Ping, Role,
-    PendingInvitation, AlertChannel, AlertDelivery, MaintenanceWindow, Report
+    PendingInvitation, AlertChannel, AlertDelivery, AuditEvent, MaintenanceWindow, Report
 )
 
 
@@ -229,6 +229,18 @@ class DatabaseInterface(ABC):
         """Delete a maintenance window."""
         pass
 
+    # Audit log operations
+
+    @abstractmethod
+    async def create_audit_event(self, event: AuditEvent) -> None:
+        """Persist an audit event."""
+        pass
+
+    @abstractmethod
+    async def list_audit_events(self, team_id: str, limit: int = 100) -> List[AuditEvent]:
+        """List audit events for a team, newest first."""
+        pass
+
     # Alert delivery queue / history operations
 
     @abstractmethod
@@ -275,6 +287,11 @@ class DatabaseInterface(ABC):
     @abstractmethod
     async def query_due_checks(self, current_time_seconds: int, limit: int = 100) -> List[Check]:
         """Query checks that are due for late detection."""
+        pass
+
+    @abstractmethod
+    async def query_due_http_checks(self, current_time_seconds: int, limit: int = 500) -> List[Check]:
+        """Query active HTTP checks due for polling (next_due_at missing or <= now)."""
         pass
 
     @abstractmethod

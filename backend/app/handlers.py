@@ -89,6 +89,9 @@ async def _late_detector_impl(event: Dict[str, Any], context: Any) -> Dict[str, 
     # enqueued outside scheduler context (e.g. the ping recovery path).
     drain_stats = await process_due_deliveries(db)
 
+    # Dead-man's-switch: signal an external monitor that detection ran.
+    await _ping_heartbeat(settings)
+
     # Record enhanced metrics
     metrics.late_detection_run(len(due_checks), alerts_queued)
     log_business_event('enhanced_late_detection_run',
@@ -113,6 +116,17 @@ async def _late_detector_impl(event: Dict[str, Any], context: Any) -> Dict[str, 
             }
         ),
     }
+
+
+async def _ping_heartbeat(settings) -> None:
+    """Ping the configured dead-man's-switch URL (best effort, never raises)."""
+    if not settings.heartbeat_url:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.get(settings.heartbeat_url)
+    except Exception as e:
+        logger.warning(f"Dead-man's-switch heartbeat failed: {e}")
 
 
 def late_detector_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:

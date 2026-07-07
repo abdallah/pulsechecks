@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     environment: str = "production"
     debug: bool = False
     ping_retention_days: int = 90
+
+    # Dead-man's-switch: external heartbeat URL pinged after every
+    # successful late-detection run. Point this at an independent
+    # monitor (e.g. a healthchecks.io check) so you find out when
+    # PulseChecks' own detection loop stops running.
+    heartbeat_url: str = ""
     frontend_url: str = "https://pulsechecks.example.com"
 
     # SMTP (email alert channels — cloud-agnostic; use SES SMTP on AWS,

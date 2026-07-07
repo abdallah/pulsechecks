@@ -34,22 +34,17 @@ export default function TeamSettingsPage({ user, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [testingChannel, setTestingChannel] = useState(null)
   const [showAddMember, setShowAddMember] = useState(false)
-  const [showAddAlert, setShowAddAlert] = useState(false)
   const [newMemberEmail, setNewMemberEmail] = useState('')
   const [newMemberRole, setNewMemberRole] = useState('member')
-  const [newAlertName, setNewAlertName] = useState('')
-  const [newAlertDisplayName, setNewAlertDisplayName] = useState('')
-  const [newAlertShared, setNewAlertShared] = useState(false)
-  const [newChannelType, setNewChannelType] = useState('mattermost')
-  const [newChannelConfig, setNewChannelConfig] = useState({})
   const [channels, setChannels] = useState([])
-  const [editingChannel, setEditingChannel] = useState(null)
   const [mattermostWebhook, setMattermostWebhook] = useState('')
   const [mattermostLoading, setMattermostLoading] = useState(false)
   const [mattermostWebhooks, setMattermostWebhooks] = useState([])
   const [newWebhookUrl, setNewWebhookUrl] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [confirmState, setConfirmState] = useState(null)
+  const [auditEvents, setAuditEvents] = useState([])
+  const [auditLoading, setAuditLoading] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [apiTokens, setApiTokens] = useState([])
@@ -71,6 +66,8 @@ export default function TeamSettingsPage({ user, onLogout }) {
       loadChannels()
     } else if (activeTab === 'tokens') {
       loadApiTokens()
+    } else if (activeTab === 'audit') {
+      loadAuditLog()
     } else if (activeTab === 'reports') {
       loadReports()
       loadReportChecks()
@@ -102,6 +99,18 @@ export default function TeamSettingsPage({ user, onLogout }) {
     } catch {
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadAuditLog() {
+    setAuditLoading(true)
+    try {
+      const data = await api.getTeamAuditLog(teamId)
+      setAuditEvents(Array.isArray(data) ? data : [])
+    } catch {
+      setAuditEvents([])
+    } finally {
+      setAuditLoading(false)
     }
   }
 
@@ -226,32 +235,6 @@ export default function TeamSettingsPage({ user, onLogout }) {
     }
   }
 
-  async function handleAddAlert(e) {
-    e.preventDefault()
-    if (!newAlertName.trim() || !newAlertDisplayName.trim()) return
-
-    try {
-      const channelData = {
-        name: newAlertName.trim(),
-        displayName: newAlertDisplayName.trim(),
-        type: newChannelType,
-        configuration: newChannelConfig,
-        shared: newAlertShared
-      }
-
-      await api.createAlertChannel(teamId, channelData)
-      setNewAlertName('')
-      setNewAlertDisplayName('')
-      setNewChannelType('mattermost')
-      setNewChannelConfig({})
-      setNewAlertShared(false)
-      setShowAddAlert(false)
-      toast.success('Alert channel created')
-      loadChannels()
-    } catch (error) {
-      toast.error('Failed to create channel: ' + error.message)
-    }
-  }
 
   async function loadChannels() {
     try {
@@ -378,23 +361,6 @@ export default function TeamSettingsPage({ user, onLogout }) {
     })
   }
 
-  function handleDeleteChannel(channelId) {
-    setConfirmState({
-      title: 'Delete Alert Channel',
-      message: 'Are you sure you want to delete this alert channel? Checks using it will stop sending notifications through it.',
-      confirmLabel: 'Delete',
-      destructive: true,
-      onConfirm: async () => {
-        try {
-          await api.deleteAlertChannel(teamId, channelId)
-          toast.success('Alert channel deleted')
-          loadChannels()
-        } catch (error) {
-          toast.error('Failed to delete channel: ' + error.message)
-        }
-      },
-    })
-  }
 
   async function handleTestChannel(channelId) {
     setTestingChannel(channelId)
@@ -408,210 +374,8 @@ export default function TeamSettingsPage({ user, onLogout }) {
     }
   }
 
-  function renderChannelConfiguration() {
-    if (newChannelType === 'sns') {
-      return (
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-          <p className="text-sm text-blue-700">
-            SNS topic will be created automatically when you create this channel.
-          </p>
-        </div>
-      )
-    }
 
-    if (newChannelType === 'mattermost') {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
-          <input
-            type="url"
-            value={newChannelConfig.webhook_url || ''}
-            onChange={(e) => setNewChannelConfig({ webhook_url: e.target.value })}
-            placeholder="https://chat.example.com/hooks/your-webhook-id"
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            required
-          />
-        </div>
-      )
-    }
 
-    if (newChannelType === 'webhook') {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
-          <input
-            type="url"
-            value={newChannelConfig.webhook_url || ''}
-            onChange={(e) => setNewChannelConfig({ webhook_url: e.target.value })}
-            placeholder="https://hooks.example.com/alerts"
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            required
-          />
-        </div>
-      )
-    }
-
-    if (newChannelType === 'email') {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Recipients</label>
-          <input
-            type="text"
-            value={(newChannelConfig.recipients || []).join(', ')}
-            onChange={(e) => setNewChannelConfig({ recipients: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-            placeholder="oncall@example.com, sre-team@example.com"
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            required
-          />
-          <p className="mt-1 text-xs text-gray-500">Comma-separated, up to 20 addresses.</p>
-        </div>
-      )
-    }
-
-    if (newChannelType === 'telegram') {
-      return (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Bot Token</label>
-            <input
-              type="text"
-              value={newChannelConfig.bot_token || ''}
-              onChange={(e) => setNewChannelConfig({ ...newChannelConfig, bot_token: e.target.value })}
-              placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Chat ID</label>
-            <input
-              type="text"
-              value={newChannelConfig.chat_id || ''}
-              onChange={(e) => setNewChannelConfig({ ...newChannelConfig, chat_id: e.target.value })}
-              placeholder="-1001234567890"
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
-            />
-          </div>
-        </div>
-      )
-    }
-
-    return null
-  }
-
-  async function handleUpdateChannel(e) {
-    e.preventDefault()
-
-    try {
-      const updateData = {
-        displayName: editingChannel.displayName,
-        configuration: editingChannel.configuration,
-        shared: editingChannel.shared
-      }
-
-      await api.updateAlertChannel(teamId, editingChannel.channelId, updateData)
-      setEditingChannel(null)
-      toast.success('Channel updated')
-      loadChannels()
-    } catch (error) {
-      toast.error('Failed to update channel: ' + error.message)
-    }
-  }
-
-  function renderEditChannelConfiguration() {
-    if (!editingChannel) return null
-
-    if (editingChannel.type === 'sns') {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700">SNS Topic ARN</label>
-          <input
-            type="text"
-            value={editingChannel.configuration?.topic_arn || ''}
-            onChange={(e) => setEditingChannel({
-              ...editingChannel,
-              configuration: { ...editingChannel.configuration, topic_arn: e.target.value }
-            })}
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            required
-          />
-        </div>
-      )
-    }
-
-    if (editingChannel.type === 'mattermost' || editingChannel.type === 'webhook') {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Webhook URL</label>
-          <input
-            type="url"
-            value={editingChannel.configuration?.webhook_url || ''}
-            onChange={(e) => setEditingChannel({
-              ...editingChannel,
-              configuration: { ...editingChannel.configuration, webhook_url: e.target.value }
-            })}
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            required
-          />
-        </div>
-      )
-    }
-
-    if (editingChannel.type === 'email') {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Recipients</label>
-          <input
-            type="text"
-            value={(editingChannel.configuration?.recipients || []).join(', ')}
-            onChange={(e) => setEditingChannel({
-              ...editingChannel,
-              configuration: { ...editingChannel.configuration, recipients: e.target.value.split(',').map(s => s.trim()).filter(Boolean) }
-            })}
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            required
-          />
-          <p className="mt-1 text-xs text-gray-500">Comma-separated, up to 20 addresses.</p>
-        </div>
-      )
-    }
-
-    if (editingChannel.type === 'telegram') {
-      return (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Bot Token</label>
-            <input
-              type="text"
-              value={editingChannel.configuration?.bot_token || ''}
-              onChange={(e) => setEditingChannel({
-                ...editingChannel,
-                configuration: { ...editingChannel.configuration, bot_token: e.target.value }
-              })}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Chat ID</label>
-            <input
-              type="text"
-              value={editingChannel.configuration?.chat_id || ''}
-              onChange={(e) => setEditingChannel({
-                ...editingChannel,
-                configuration: { ...editingChannel.configuration, chat_id: e.target.value }
-              })}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required
-            />
-          </div>
-        </div>
-      )
-    }
-
-    return null
-  }
 
   async function handleDeleteTeam() {
     if (deleteConfirmText !== team?.name) {
@@ -714,6 +478,17 @@ export default function TeamSettingsPage({ user, onLogout }) {
             >
               <FileText className="h-4 w-4 inline mr-2" />
               Reports
+            </button>
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'audit'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <FileText className="h-4 w-4 inline mr-2" />
+              Audit Log
             </button>
             <button
               onClick={() => setActiveTab('danger')}
@@ -879,93 +654,17 @@ export default function TeamSettingsPage({ user, onLogout }) {
                   Alert Channels
                 </h3>
                 <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                  Configure notification channels for alerts (SNS, Mattermost, Webhook, Telegram).
+                  Channels this team can notify. Create, edit, and delete channels on the Alert Channels page.
                 </p>
               </div>
               <button
-                onClick={() => setShowAddAlert(true)}
+                onClick={() => navigate(`/teams/${teamId}/channels`)}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Channel
+                <Settings className="h-4 w-4 mr-2" />
+                Manage Channels
               </button>
             </div>
-
-            {showAddAlert && (
-              <div className="border-t border-gray-200 px-4 py-4 bg-gray-50">
-                <form onSubmit={handleAddAlert} className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Channel Name</label>
-                      <input
-                        type="text"
-                        value={newAlertName}
-                        onChange={(e) => setNewAlertName(e.target.value)}
-                        placeholder="my-alerts"
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Display Name</label>
-                      <input
-                        type="text"
-                        value={newAlertDisplayName}
-                        onChange={(e) => setNewAlertDisplayName(e.target.value)}
-                        placeholder="My Alerts Channel"
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Channel Type</label>
-                    <select
-                      value={newChannelType}
-                      onChange={(e) => setNewChannelType(e.target.value)}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    >
-                      <option value="sns">SNS Topic</option>
-                      <option value="mattermost">Mattermost</option>
-                      <option value="webhook">Webhook</option>
-                      <option value="telegram">Telegram</option>
-                      <option value="email">Email</option>
-                    </select>
-                  </div>
-
-                  {renderChannelConfiguration()}
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={newAlertShared}
-                      onChange={(e) => setNewAlertShared(e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900">
-                      Shared channel (can be used by other teams)
-                    </label>
-                  </div>
-
-                  <div className="flex space-x-3">
-                    <button
-                      type="submit"
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
-                    >
-                      Create Channel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddAlert(false)}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
 
             <div className="border-t border-gray-200">
               {channels.length === 0 ? (
@@ -995,11 +694,6 @@ export default function TeamSettingsPage({ user, onLogout }) {
                             </div>
                             <div className="text-sm text-gray-500">
                               {channel.type.toUpperCase()} • {channel.name}
-                              {channel.shared && (
-                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  Shared
-                                </span>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -1013,16 +707,10 @@ export default function TeamSettingsPage({ user, onLogout }) {
                             <PlayCircle className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => setEditingChannel(channel)}
-                            className="text-blue-600 hover:text-blue-800"
+                            onClick={() => navigate(`/teams/${teamId}/channels`)}
+                            className="text-blue-600 hover:text-blue-800 text-sm"
                           >
-                            <Settings className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteChannel(channel.channelId)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-4 w-4" />
+                            Edit on Channels page
                           </button>
                         </div>
                       </div>
@@ -1030,59 +718,6 @@ export default function TeamSettingsPage({ user, onLogout }) {
                   ))}
                 </ul>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Edit Channel Modal */}
-        {editingChannel && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-              <div className="mt-3">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Alert Channel</h3>
-                <form onSubmit={handleUpdateChannel} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Display Name</label>
-                    <input
-                      type="text"
-                      value={editingChannel.displayName}
-                      onChange={(e) => setEditingChannel({...editingChannel, displayName: e.target.value})}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      required
-                    />
-                  </div>
-
-                  {renderEditChannelConfiguration()}
-
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={editingChannel.shared}
-                      onChange={(e) => setEditingChannel({...editingChannel, shared: e.target.checked})}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <label className="ml-2 block text-sm text-gray-900">
-                      Shared channel (can be used by other teams)
-                    </label>
-                  </div>
-
-                  <div className="flex space-x-3">
-                    <button
-                      type="submit"
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
-                    >
-                      Update Channel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingChannel(null)}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              </div>
             </div>
           </div>
         )}
@@ -1323,6 +958,52 @@ export default function TeamSettingsPage({ user, onLogout }) {
         )}
 
         {/* Danger Zone Tab */}
+        {activeTab === 'audit' && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Audit Log</h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                Administrative actions in this team — who did what, and when. Admins only.
+              </p>
+            </div>
+            <div className="border-t border-gray-200">
+              {auditLoading ? (
+                <div className="px-4 py-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                </div>
+              ) : auditEvents.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-gray-500">
+                  No recorded actions yet
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {auditEvents.map((event) => (
+                    <li key={event.eventId} className="px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm text-gray-900">
+                            <span className="font-medium">{event.actorEmail}</span>
+                            <span className="mx-1.5 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                              {event.action}
+                            </span>
+                            {event.targetName || event.targetId}
+                          </p>
+                          {event.detail && (
+                            <p className="text-xs text-gray-500 mt-0.5">{event.detail}</p>
+                          )}
+                        </div>
+                        <span className="text-sm text-gray-500 flex-shrink-0 ml-4" title={new Date(event.createdAt).toLocaleString()}>
+                          {new Date(event.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'danger' && (
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
             <div className="px-4 py-5 sm:px-6">

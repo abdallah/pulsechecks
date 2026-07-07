@@ -97,3 +97,21 @@ resource "google_firestore_index" "alert_deliveries_check_history" {
 
 # Single-field indexes for token/teamId/alertAfterAt are managed by Firestore automatically.
 # Add google_firestore_index resources only for true composite index requirements.
+
+# Composite index for the HTTP poller's due-check query
+resource "google_firestore_index" "http_checks_due" {
+  project    = var.gcp_project_id
+  database   = google_firestore_database.pulsechecks.name
+  collection = "checks"
+
+  fields {
+    field_path = "type"
+    order      = "ASCENDING"
+  }
+  fields {
+    field_path = "nextDueAt"
+    order      = "ASCENDING"
+  }
+
+  depends_on = [google_firestore_database.pulsechecks]
+}

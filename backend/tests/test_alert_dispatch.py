@@ -174,3 +174,38 @@ class TestQueueDrain:
         db.query_due_alert_deliveries.return_value = []
         stats = await process_due_deliveries(db)
         assert stats["processed"] == 0
+
+
+class TestDeadMansSwitch:
+    @pytest.mark.asyncio
+    async def test_heartbeat_pinged_when_configured(self):
+        from app.handlers import _ping_heartbeat
+
+        settings = MagicMock()
+        settings.heartbeat_url = "https://hc-ping.example.com/uuid"
+        mock_client = AsyncMock()
+
+        with patch("app.handlers.httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__.return_value = mock_client
+            await _ping_heartbeat(settings)
+
+        mock_client.get.assert_awaited_once_with("https://hc-ping.example.com/uuid")
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_skipped_when_unset(self):
+        from app.handlers import _ping_heartbeat
+
+        settings = MagicMock()
+        settings.heartbeat_url = ""
+        with patch("app.handlers.httpx.AsyncClient") as mock_cls:
+            await _ping_heartbeat(settings)
+        mock_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_failure_never_raises(self):
+        from app.handlers import _ping_heartbeat
+
+        settings = MagicMock()
+        settings.heartbeat_url = "https://hc-ping.example.com/uuid"
+        with patch("app.handlers.httpx.AsyncClient", side_effect=RuntimeError("network down")):
+            await _ping_heartbeat(settings)  # must not raise

@@ -75,6 +75,8 @@ export default function CheckDetailPage({ user, onLogout }) {
   const [showTokenRotated, setShowTokenRotated] = useState(false)
   const [confirmState, setConfirmState] = useState(null)
   const [alertHistory, setAlertHistory] = useState([])
+  const [escalationForm, setEscalationForm] = useState({ escalationMinutes: 0, escalationAlertChannels: [], suppressAfterCount: 0, suppressDurationMinutes: 0 })
+  const [savingEscalation, setSavingEscalation] = useState(false)
   const [availableTopics, setAvailableTopics] = useState([])
   const [availableChannels, setAvailableChannels] = useState([])
   const [teamSlug, setTeamSlug] = useState(null)
@@ -139,6 +141,12 @@ export default function CheckDetailPage({ user, onLogout }) {
         checkData.pingUrl = `${getPingBaseUrl()}/ping/${checkData.token}`
       }
       setCheck(checkData)
+      setEscalationForm({
+        escalationMinutes: checkData.escalationMinutes || 0,
+        escalationAlertChannels: checkData.escalationAlertChannels || [],
+        suppressAfterCount: checkData.suppressAfterCount || 0,
+        suppressDurationMinutes: checkData.suppressDurationMinutes || 0,
+      })
       // Backend returns array directly, not wrapped in {pings: [...]}
       setPings(Array.isArray(pingsData) ? pingsData : pingsData.pings || [])
     } catch {
@@ -315,6 +323,24 @@ export default function CheckDetailPage({ user, onLogout }) {
       toast.error('Failed to update alert channels: ' + error.message)
       // Revert on error
       loadCheckData()
+    }
+  }
+
+  async function handleSaveEscalation() {
+    setSavingEscalation(true)
+    try {
+      const updated = await api.updateCheck(teamId, checkId, {
+        escalationMinutes: escalationForm.escalationMinutes,
+        escalationAlertChannels: escalationForm.escalationAlertChannels,
+        suppressAfterCount: escalationForm.suppressAfterCount,
+        suppressDurationMinutes: escalationForm.suppressDurationMinutes,
+      })
+      setCheck(updated)
+      toast.success('Escalation settings saved')
+    } catch (error) {
+      toast.error('Failed to save escalation settings: ' + error.message)
+    } finally {
+      setSavingEscalation(false)
     }
   }
 
@@ -1205,7 +1231,100 @@ export default function CheckDetailPage({ user, onLogout }) {
                   )}
                 </div>
 
-                {/* You may want to add more alert configuration sections here, e.g., Alert Topics, etc. */}
+                {/* Escalation & Suppression */}
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="text-sm font-medium text-gray-700 mb-1">Escalation</div>
+                  <p className="text-sm text-gray-500 mb-3">
+                    If the check stays late, notify additional channels after a delay. Set to 0 to disable.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="escalationMinutes" className="block text-sm text-gray-700">Escalate after (minutes)</label>
+                      <input
+                        type="number"
+                        id="escalationMinutes"
+                        min="0"
+                        max="1440"
+                        value={escalationForm.escalationMinutes}
+                        onChange={(e) => setEscalationForm({ ...escalationForm, escalationMinutes: parseInt(e.target.value) || 0 })}
+                        className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-sm text-gray-700 mb-1">Escalation channels</span>
+                      {availableChannels.length === 0 ? (
+                        <p className="text-sm text-gray-500">No channels available</p>
+                      ) : (
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {availableChannels.map((channel) => (
+                            <label key={channel.channelId} className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={escalationForm.escalationAlertChannels.includes(channel.channelId)}
+                                onChange={(e) => {
+                                  const current = escalationForm.escalationAlertChannels
+                                  setEscalationForm({
+                                    ...escalationForm,
+                                    escalationAlertChannels: e.target.checked
+                                      ? [...current, channel.channelId]
+                                      : current.filter(id => id !== channel.channelId),
+                                  })
+                                }}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm text-gray-900">{channel.displayName} ({channel.type.toUpperCase()})</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-sm font-medium text-gray-700 mt-5 mb-1">Alert suppression</div>
+                  <p className="text-sm text-gray-500 mb-3">
+                    Mute repeat alerts after N consecutive notifications. Set to 0 to disable.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="suppressAfterCount" className="block text-sm text-gray-700">Suppress after (alerts)</label>
+                      <input
+                        type="number"
+                        id="suppressAfterCount"
+                        min="0"
+                        max="100"
+                        value={escalationForm.suppressAfterCount}
+                        onChange={(e) => setEscalationForm({ ...escalationForm, suppressAfterCount: parseInt(e.target.value) || 0 })}
+                        className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="suppressDurationMinutes" className="block text-sm text-gray-700">Suppress for (minutes)</label>
+                      <input
+                        type="number"
+                        id="suppressDurationMinutes"
+                        min="0"
+                        max="10080"
+                        value={escalationForm.suppressDurationMinutes}
+                        onChange={(e) => setEscalationForm({ ...escalationForm, suppressDurationMinutes: parseInt(e.target.value) || 0 })}
+                        className="mt-1 block w-32 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {check?.suppressedUntil && new Date(check.suppressedUntil) > new Date() && (
+                    <div className="mt-3 p-3 bg-amber-50 rounded-md text-sm text-amber-800">
+                      Alerts currently suppressed until {new Date(check.suppressedUntil).toLocaleString()}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSaveEscalation}
+                    disabled={savingEscalation}
+                    className="mt-4 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    {savingEscalation ? 'Saving…' : 'Save escalation settings'}
+                  </button>
+                </div>
 
               </div>
             </div>

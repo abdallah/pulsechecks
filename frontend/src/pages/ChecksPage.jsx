@@ -27,6 +27,7 @@ export default function ChecksPage({ user, onLogout }) {
     url: '',
     expectedStatusCode: 200,
     failureThreshold: 1,
+    tags: [],
   })
   const [creating, setCreating] = useState(false)
   const [availableChannels, setAvailableChannels] = useState([])
@@ -35,12 +36,16 @@ export default function ChecksPage({ user, onLogout }) {
   const [showTokenRotated, setShowTokenRotated] = useState(null)
   const [actionLoading, setActionLoading] = useState(null)
   const [selectedChecks, setSelectedChecks] = useState(new Set())
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [tagFilter, setTagFilter] = useState(null)
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
   const [showQuickEdit, setShowQuickEdit] = useState(null)
   const [quickEditData, setQuickEditData] = useState({
     name: '',
     periodSeconds: 60, // 1 minute in seconds
     graceSeconds: 300, // 5 minutes in seconds
+    tags: [],
   })
   const [quickEditLoading, setQuickEditLoading] = useState(false)
   
@@ -122,7 +127,7 @@ export default function ChecksPage({ user, onLogout }) {
     setCreating(true)
     try {
       await api.createCheck(teamId, formData)
-      setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [], type: 'heartbeat', schedule: '', url: '', expectedStatusCode: 200, failureThreshold: 1 })
+      setFormData({ name: '', periodSeconds: 60, graceSeconds: 300, alertChannels: [], type: 'heartbeat', schedule: '', url: '', expectedStatusCode: 200, failureThreshold: 1, tags: [] })
       setShowCreateCheck(false)
       loadChecks()
       toast.success('Check created successfully')
@@ -172,11 +177,25 @@ export default function ChecksPage({ user, onLogout }) {
     setSelectedChecks(newSelected)
   }
 
+  const allTags = [...new Set(checks.flatMap(c => c.tags || []))].sort()
+
+  const filteredChecks = checks.filter(c => {
+    if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    if (statusFilter !== 'all' && c.status !== statusFilter) return false
+    if (tagFilter && !(c.tags || []).includes(tagFilter)) return false
+    return true
+  })
+
+  const statusCounts = checks.reduce((acc, c) => {
+    acc[c.status] = (acc[c.status] || 0) + 1
+    return acc
+  }, {})
+
   function toggleSelectAll() {
-    if (selectedChecks.size === checks.length) {
+    if (selectedChecks.size === filteredChecks.length) {
       setSelectedChecks(new Set())
     } else {
-      setSelectedChecks(new Set(checks.map(c => c.checkId)))
+      setSelectedChecks(new Set(filteredChecks.map(c => c.checkId)))
     }
   }
 
@@ -234,6 +253,7 @@ export default function ChecksPage({ user, onLogout }) {
       name: check.name,
       periodSeconds: check.periodSeconds,
       graceSeconds: check.graceSeconds,
+      tags: check.tags || [],
     })
     setShowQuickEdit(check.checkId)
   }
@@ -517,6 +537,20 @@ export default function ChecksPage({ user, onLogout }) {
                 </div>
               )}
               
+              <div>
+                <label htmlFor="createTags" className="block text-sm font-medium text-gray-700">
+                  Tags <span className="text-gray-400 font-normal">(optional, comma-separated)</span>
+                </label>
+                <input
+                  type="text"
+                  id="createTags"
+                  value={(formData.tags || []).join(', ')}
+                  onChange={(e) => setFormData({ ...formData, tags: e.target.value.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) })}
+                  placeholder="prod, backups, db"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+              </div>
+
               {/* Alert Channels Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -625,20 +659,75 @@ export default function ChecksPage({ user, onLogout }) {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Search & Filters */}
+            <div className="bg-white shadow sm:rounded-lg p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search checks by name…"
+                  className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  aria-label="Search checks"
+                />
+                <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by status">
+                  {['all', 'up', 'late', 'pending', 'paused'].map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setStatusFilter(status)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-full border ${
+                        statusFilter === status
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {status === 'all' ? `All (${checks.length})` : `${status.charAt(0).toUpperCase()}${status.slice(1)} (${statusCounts[status] || 0})`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {allTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter by tag">
+                  <span className="text-xs text-gray-500 mr-1">Tags:</span>
+                  {allTags.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                      className={`px-2 py-0.5 text-xs rounded-full border ${
+                        tagFilter === tag
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(searchQuery || statusFilter !== 'all' || tagFilter) && (
+                <p className="text-xs text-gray-500">
+                  Showing {filteredChecks.length} of {checks.length} checks
+                  <button onClick={() => { setSearchQuery(''); setStatusFilter('all'); setTagFilter(null) }} className="ml-2 text-blue-600 hover:underline">
+                    Clear filters
+                  </button>
+                </p>
+              )}
+            </div>
+
             {/* Bulk Actions Bar */}
-            {checks.length > 0 && (
+            {filteredChecks.length > 0 && (
               <div className="bg-white shadow sm:rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <label className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={selectedChecks.size === checks.length && checks.length > 0}
+                        checked={selectedChecks.size === filteredChecks.length && filteredChecks.length > 0}
                         onChange={toggleSelectAll}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
                       <span className="ml-2 text-sm text-gray-700">
-                        Select all ({selectedChecks.size} of {checks.length} selected)
+                        Select all ({selectedChecks.size} of {filteredChecks.length} selected)
                       </span>
                     </label>
                   </div>
@@ -669,7 +758,7 @@ export default function ChecksPage({ user, onLogout }) {
 
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
               <ul className="divide-y divide-gray-200">
-                {checks.map((check) => (
+                {filteredChecks.map((check) => (
                 <li
                   key={check.checkId}
                   className="hover:bg-gray-50"
@@ -695,6 +784,11 @@ export default function ChecksPage({ user, onLogout }) {
                               HTTP
                             </span>
                           )}
+                          {(check.tags || []).map((tag) => (
+                            <span key={tag} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {tag}
+                            </span>
+                          ))}
                           {check.alertTopics && check.alertTopics.length > 0 && (
                             <div className="flex items-center">
                               <Bell className="h-4 w-4 text-orange-500" title={`${check.alertTopics.length} alert topic(s) configured`} />
@@ -953,7 +1047,21 @@ export default function ChecksPage({ user, onLogout }) {
                     ⚠️ Grace period is longer than 2× the check period — you may miss alerts
                   </div>
                 )}
-                
+
+                <div>
+                  <label htmlFor="quickEditTags" className="block text-sm font-medium text-gray-700">
+                    Tags <span className="text-gray-400 font-normal">(optional, comma-separated)</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="quickEditTags"
+                    value={(quickEditData.tags || []).join(', ')}
+                    onChange={(e) => setQuickEditData({ ...quickEditData, tags: e.target.value.split(',').map(t => t.trim().toLowerCase()).filter(Boolean) })}
+                    placeholder="prod, backups, db"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                </div>
+
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="submit"

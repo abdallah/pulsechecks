@@ -155,11 +155,10 @@ class TestPollSingleCheck:
 class TestPollHttpChecks:
     @pytest.mark.asyncio
     async def test_skips_checks_not_yet_due(self):
-        future_due = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
-        check = make_check(next_due_at=future_due)
-
+        """Due-filtering now happens in the database query — an empty
+        result means nothing is polled."""
         mock_db = AsyncMock()
-        mock_db.list_all_http_checks.return_value = [check]
+        mock_db.query_due_http_checks.return_value = []
 
         with patch("app.scheduler.create_db_client", return_value=mock_db), \
              patch("app.scheduler._poll_single_check", new_callable=AsyncMock) as mock_poll:
@@ -172,7 +171,7 @@ class TestPollHttpChecks:
         check = make_check(next_due_at=past_due)
 
         mock_db = AsyncMock()
-        mock_db.list_all_http_checks.return_value = [check]
+        mock_db.query_due_http_checks.return_value = [check]
 
         with patch("app.scheduler.create_db_client", return_value=mock_db), \
              patch("app.scheduler._poll_single_check", new_callable=AsyncMock) as mock_poll:
@@ -185,7 +184,7 @@ class TestPollHttpChecks:
         check = make_check(next_due_at=None)
 
         mock_db = AsyncMock()
-        mock_db.list_all_http_checks.return_value = [check]
+        mock_db.query_due_http_checks.return_value = [check]
 
         with patch("app.scheduler.create_db_client", return_value=mock_db), \
              patch("app.scheduler._poll_single_check", new_callable=AsyncMock) as mock_poll:

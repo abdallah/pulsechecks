@@ -16,6 +16,8 @@ from ..utils import generate_id, get_iso_timestamp, generate_slug
 from ..logging_config import log_business_event
 from ..posthog_client import get_posthog_client, new_context, identify_context
 
+from ..audit import record_audit
+
 router = APIRouter(prefix="/teams", tags=["teams"])
 
 
@@ -225,6 +227,7 @@ async def add_team_member(
             joined_at=get_iso_timestamp(),
         )
         await db.add_team_member(new_member)
+        await record_audit(db, team_id, current_user, "member.added", "member", user.user_id, email, detail=f"role: {role.value}")
 
         posthog = get_posthog_client()
         with new_context(client=posthog):
@@ -265,6 +268,7 @@ async def add_team_member(
             invited_at=get_iso_timestamp(),
         )
         await db.create_pending_invitation(invitation)
+        await record_audit(db, team_id, current_user, "member.invited", "member", email, email, detail=f"role: {role.value}")
 
         posthog = get_posthog_client()
         with new_context(client=posthog):
@@ -307,7 +311,8 @@ async def remove_team_member(
     
     # Remove member
     await db.remove_team_member(team_id, user_id)
-    
+    await record_audit(db, team_id, current_user, "member.removed", "member", user_id)
+
     return {"message": "Member removed successfully"}
 
 
@@ -343,7 +348,8 @@ async def update_team_member_role(
     
     # Update member role
     await db.update_team_member_role(team_id, user_id, new_role)
-    
+    await record_audit(db, team_id, current_user, "member.role_changed", "member", user_id, detail=f"new role: {new_role.value}")
+
     return {"message": "Member role updated successfully"}
 
 
@@ -529,7 +535,9 @@ async def delete_team(
             detail="Team name confirmation does not match. Please type the exact team name."
         )
     
-    # Perform cascade delete
+    # Perform cascade delete. Audit is recorded first — the team's audit
+    # trail is deleted with the team, but the attempt is logged.
+    await record_audit(db, team_id, current_user, "team.deleted", "team", team_id, team.name)
     await db.delete_team(team_id)
 
     posthog = get_posthog_client()
@@ -542,3 +550,33 @@ async def delete_team(
         )
 
     return {"message": f"Team '{team.name}' and all associated data deleted successfully"}
+
+
+@router.get("/{team_id}/audit")
+async def list_team_audit_events(
+    team_id: str,
+    current_user: AuthUser,
+    db: Database,
+    limit: int = 100,
+):
+    """List the team's audit log (admin only), newest first."""
+    member = await db.get_team_member(team_id, current_user.user_id)
+    if not member or member.role != Role.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    limit = max(1, min(limit, 200))
+    events = await db.list_audit_events(team_id, limit=limit)
+    return [
+        {
+            "eventId": e.event_id,
+            "actorId": e.actor_id,
+            "actorEmail": e.actor_email,
+            "action": e.action,
+            "targetType": e.target_type,
+            "targetId": e.target_id,
+            "targetName": e.target_name,
+            "detail": e.detail,
+            "createdAt": e.created_at,
+        }
+        for e in events
+    ]

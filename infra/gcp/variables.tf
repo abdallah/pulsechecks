@@ -145,3 +145,9 @@ variable "smtp_from" {
   type        = string
   default     = ""
 }
+
+variable "heartbeat_url" {
+  description = "External dead-man's-switch URL pinged after each late-detection run (optional)"
+  type        = string
+  default     = ""
+}

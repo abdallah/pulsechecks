@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from ..config import get_settings
 from ..models import (
     User, Team, TeamMember, Check, Ping, Role, CheckStatus,
-    PendingInvitation, AlertChannel, AlertChannelType, AlertDelivery, MaintenanceWindow, Report
+    PendingInvitation, AlertChannel, AlertChannelType, AlertDelivery, AuditEvent, MaintenanceWindow, Report
 )
 from ..errors import PulsechecksError
 from ..utils import get_iso_timestamp, get_current_time_seconds
@@ -343,7 +343,9 @@ class FirestoreClient(DatabaseInterface):
             'schedule': check.schedule,
             'url': check.url,
             'expectedStatusCode': check.expected_status_code,
+            'expectedString': check.expected_string,
             'failureThreshold': check.failure_threshold,
+            'tags': check.tags or [],
         }
 
         # Remove None values (but keep slug and other important fields)
@@ -690,6 +692,51 @@ class FirestoreClient(DatabaseInterface):
                    .collection('maintenance').document(window_id))
         await doc_ref.delete()
 
+    # Audit log operations
+
+    async def create_audit_event(self, event: AuditEvent) -> None:
+        """Persist an audit event."""
+        settings = get_settings()
+        ttl_seconds = get_current_time_seconds() + (settings.ping_retention_days * 24 * 60 * 60)
+        doc_ref = (self.db.collection('teams').document(event.team_id)
+                   .collection('audit').document(event.event_id))
+        await doc_ref.set({
+            'eventId': event.event_id,
+            'teamId': event.team_id,
+            'actorId': event.actor_id,
+            'actorEmail': event.actor_email,
+            'action': event.action,
+            'targetType': event.target_type,
+            'targetId': event.target_id,
+            'targetName': event.target_name,
+            'detail': event.detail,
+            'createdAt': event.created_at,
+            'ttl': datetime.fromtimestamp(ttl_seconds, tz=timezone.utc),
+        })
+
+    async def list_audit_events(self, team_id: str, limit: int = 100) -> List[AuditEvent]:
+        """List audit events for a team, newest first."""
+        query = (self.db.collection('teams').document(team_id)
+                 .collection('audit')
+                 .order_by('createdAt', direction='DESCENDING')
+                 .limit(limit))
+        events = []
+        async for doc in query.stream():
+            data = doc.to_dict()
+            events.append(AuditEvent(
+                event_id=data['eventId'],
+                team_id=data['teamId'],
+                actor_id=data['actorId'],
+                actor_email=data['actorEmail'],
+                action=data['action'],
+                target_type=data['targetType'],
+                target_id=data['targetId'],
+                target_name=data.get('targetName'),
+                detail=data.get('detail'),
+                created_at=data['createdAt'],
+            ))
+        return events
+
     # Alert delivery queue / history operations
 
     @staticmethod
@@ -864,6 +911,36 @@ class FirestoreClient(DatabaseInterface):
             data = doc.to_dict()
             check = self._dict_to_check(data)
             checks.append(check)
+
+        return checks
+
+    async def query_due_http_checks(self, current_time_seconds: int, limit: int = 500) -> List[Check]:
+        """Query active HTTP checks due for polling (next_due_at missing or <= now).
+
+        Uses the (type, nextDueAt) composite index instead of streaming
+        every HTTP check on every poll cycle.
+        """
+        checks_ref = self.db.collection('checks')
+        checks = []
+
+        due_query = (checks_ref
+                     .where('type', '==', 'http')
+                     .where('nextDueAt', '<=', current_time_seconds)
+                     .limit(limit))
+        async for doc in due_query.stream():
+            check = self._dict_to_check(doc.to_dict())
+            if check.status != CheckStatus.PAUSED.value:
+                checks.append(check)
+
+        # Never-polled checks have no nextDueAt yet
+        new_query = (checks_ref
+                     .where('type', '==', 'http')
+                     .where('nextDueAt', '==', None)
+                     .limit(limit))
+        async for doc in new_query.stream():
+            check = self._dict_to_check(doc.to_dict())
+            if check.status != CheckStatus.PAUSED.value:
+                checks.append(check)
 
         return checks
 
@@ -1060,5 +1137,10 @@ class FirestoreClient(DatabaseInterface):
             schedule=data.get('schedule'),
             url=data.get('url'),
             expected_status_code=int(data.get('expectedStatusCode', 200)),
+            expected_string=data.get('expectedString'),
             failure_threshold=int(data.get('failureThreshold', 1)),
+            suppress_after_count=int(data['suppressAfterCount']) if data.get('suppressAfterCount') else None,
+            suppress_duration_minutes=int(data['suppressDurationMinutes']) if data.get('suppressDurationMinutes') else None,
+            consecutive_failure_count=int(data.get('consecutiveFailureCount', 0)),
+            tags=data.get('tags', []),
         )

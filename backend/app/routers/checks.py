@@ -11,6 +11,7 @@ from ..metrics import get_metrics_client
 from ..utils import generate_token, get_iso_timestamp, get_current_time_seconds, generate_slug
 from ..utils.common import parse_iso_timestamp
 from ..posthog_client import get_posthog_client, new_context, identify_context
+from ..audit import record_audit
 
 logger = get_logger(__name__)
 from ..models import (
@@ -311,6 +312,7 @@ def _check_detail_response(check) -> CheckDetailResponse:
         createdAt=check.created_at,
         alertChannels=check.alert_channels,
         escalationMinutes=check.escalation_minutes,
+        escalationAlertChannels=getattr(check, 'escalation_alert_channels', []) or [],
         escalationTriggeredAt=getattr(check, 'escalation_triggered_at', None),
         suppressAfterCount=getattr(check, 'suppress_after_count', None),
         suppressDurationMinutes=getattr(check, 'suppress_duration_minutes', None),
@@ -321,6 +323,7 @@ def _check_detail_response(check) -> CheckDetailResponse:
         expectedStatusCode=getattr(check, 'expected_status_code', 200),
         expectedString=getattr(check, 'expected_string', None),
         failureThreshold=getattr(check, 'failure_threshold', 1),
+        tags=getattr(check, 'tags', []) or [],
     )
 
 
@@ -450,6 +453,7 @@ async def create_check(
         expected_status_code=request.expected_status_code,
         expected_string=request.expected_string,
         failure_threshold=request.failure_threshold,
+        tags=request.tags,
     )
     # Pre-compute next_due_at for cron checks so the late detector can find them immediately
     if request.type == "cron":
@@ -457,6 +461,7 @@ async def create_check(
         check.alert_after_at = str(int(check.next_due_at) + request.grace_seconds)
 
     await db.create_check(check)
+    await record_audit(db, team_id, current_user, "check.created", "check", check_id, request.name)
 
     # Record metrics and log business event
     metrics = get_metrics_client()
@@ -510,6 +515,7 @@ async def list_team_checks(
             expectedStatusCode=check.expected_status_code,
             expectedString=getattr(check, 'expected_string', None),
             failureThreshold=getattr(check, 'failure_threshold', 1),
+            tags=getattr(check, 'tags', []) or [],
         )
         for check in checks
     ]
@@ -562,11 +568,16 @@ async def update_check(
     if request.alert_channels is not None:
         updates["alertChannels"] = request.alert_channels
     if request.escalation_minutes is not None:
-        updates["escalationMinutes"] = request.escalation_minutes
+        # 0 disables escalation
+        updates["escalationMinutes"] = request.escalation_minutes or None
+    if request.escalation_alert_channels is not None:
+        updates["escalationAlertChannels"] = request.escalation_alert_channels
+    if request.tags is not None:
+        updates["tags"] = request.tags
     if request.suppress_after_count is not None:
-        updates["suppressAfterCount"] = request.suppress_after_count
+        updates["suppressAfterCount"] = request.suppress_after_count or None
     if request.suppress_duration_minutes is not None:
-        updates["suppressDurationMinutes"] = request.suppress_duration_minutes
+        updates["suppressDurationMinutes"] = request.suppress_duration_minutes or None
     if request.url is not None:
         updates["url"] = request.url
     if request.expected_status_code is not None:
@@ -595,6 +606,10 @@ async def update_check(
         updates["nextDueAt"] = calculate_next_due(last_ping_seconds, period)
 
     updated_check = await db.update_check(team_id, check_id, updates)
+    await record_audit(
+        db, team_id, current_user, "check.updated", "check", check_id, check.name,
+        detail="changed: " + ", ".join(sorted(updates.keys())),
+    )
     return _check_detail_response(updated_check)
 
 
@@ -616,6 +631,7 @@ async def pause_check(
 
     # Update status to paused
     await db.update_check(team_id, check_id, {"status": CheckStatus.PAUSED.value})
+    await record_audit(db, team_id, current_user, "check.paused", "check", check_id, check.name)
 
     posthog = get_posthog_client()
     with new_context(client=posthog):
@@ -647,6 +663,7 @@ async def resume_check(
 
     # Update status to up
     await db.update_check(team_id, check_id, {"status": CheckStatus.UP.value})
+    await record_audit(db, team_id, current_user, "check.resumed", "check", check_id, check.name)
 
     posthog = get_posthog_client()
     with new_context(client=posthog):
@@ -682,6 +699,7 @@ async def rotate_check_token(
     # Update check with new token
     updates = {"token": new_token}
     updated_check = await db.update_check(team_id, check_id, updates)
+    await record_audit(db, team_id, current_user, "check.token_rotated", "check", check_id, check.name)
 
     return _check_detail_response(updated_check)
 
@@ -771,6 +789,7 @@ async def delete_check(
 
     # Delete check (this should cascade delete pings)
     await db.delete_check(team_id, check_id)
+    await record_audit(db, team_id, current_user, "check.deleted", "check", check_id, check.name)
 
     # Record metrics and log business event
     metrics = get_metrics_client()

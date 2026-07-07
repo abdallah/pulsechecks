@@ -98,7 +98,10 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.6.0
+          # Track latest like GitLab CI does (hashicorp/terraform:latest).
+          # Old pinned binaries (1.6.0) bundle an expired HashiCorp GPG key
+          # and fail provider installs with "openpgp: key expired".
+          terraform_version: latest
 
       - name: Terraform Format Check
         working-directory: infra/${{ matrix.cloud }}

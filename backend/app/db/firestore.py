@@ -572,8 +572,8 @@ class FirestoreClient(DatabaseInterface):
         doc_ref = (self.db.collection('checks').document(ping.check_id)
                    .collection('pings').document(ping_id))
 
-        # Calculate TTL (30 days from now)
-        ttl_seconds = get_current_time_seconds() + (30 * 24 * 60 * 60)
+        from ..config import get_settings
+        ttl_seconds = get_current_time_seconds() + (get_settings().ping_retention_days * 24 * 60 * 60)
         ttl_datetime = datetime.fromtimestamp(ttl_seconds, tz=timezone.utc)
 
         await doc_ref.set({

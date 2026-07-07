@@ -431,7 +431,8 @@ class DynamoDBClient(DatabaseInterface):
     # Ping operations
     async def create_ping(self, ping: Ping) -> None:
         """Create a ping event."""
-        ttl = get_current_time_seconds() + (30 * 24 * 60 * 60)  # 30 days
+        from ..config import get_settings
+        ttl = get_current_time_seconds() + (get_settings().ping_retention_days * 24 * 60 * 60)
 
         async with self._get_table() as table:
             await table.put_item(

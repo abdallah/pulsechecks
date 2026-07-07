@@ -28,7 +28,7 @@ from .responses import (
     OkResponse,
     AlertTopicResponse,
 )
-from .entities import User, Team, Check, Ping, TeamMember, PendingInvitation, AlertChannel, AlertDelivery, MaintenanceWindow, Report
+from .entities import User, Team, Check, Ping, TeamMember, PendingInvitation, AlertChannel, AlertDelivery, AuditEvent, MaintenanceWindow, Report
 
 __all__ = [
     # Enums
@@ -70,6 +70,7 @@ __all__ = [
     "Check",
     "Ping",
     "AlertDelivery",
+    "AuditEvent",
     "MaintenanceWindow",
     "Report",
     "TeamMember",

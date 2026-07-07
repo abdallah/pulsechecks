@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any
 
 from ..models import (
     User, Team, TeamMember, Check, Ping, Role,
-    PendingInvitation, AlertChannel, AlertDelivery, MaintenanceWindow, Report
+    PendingInvitation, AlertChannel, AlertDelivery, AuditEvent, MaintenanceWindow, Report
 )
 
 
@@ -227,6 +227,18 @@ class DatabaseInterface(ABC):
     @abstractmethod
     async def delete_maintenance_window(self, team_id: str, window_id: str) -> None:
         """Delete a maintenance window."""
+        pass
+
+    # Audit log operations
+
+    @abstractmethod
+    async def create_audit_event(self, event: AuditEvent) -> None:
+        """Persist an audit event."""
+        pass
+
+    @abstractmethod
+    async def list_audit_events(self, team_id: str, limit: int = 100) -> List[AuditEvent]:
+        """List audit events for a team, newest first."""
         pass
 
     # Alert delivery queue / history operations

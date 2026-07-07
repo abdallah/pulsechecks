@@ -11,6 +11,7 @@ from ..metrics import get_metrics_client
 from ..utils import generate_token, get_iso_timestamp, get_current_time_seconds, generate_slug
 from ..utils.common import parse_iso_timestamp
 from ..posthog_client import get_posthog_client, new_context, identify_context
+from ..audit import record_audit
 
 logger = get_logger(__name__)
 from ..models import (
@@ -460,6 +461,7 @@ async def create_check(
         check.alert_after_at = str(int(check.next_due_at) + request.grace_seconds)
 
     await db.create_check(check)
+    await record_audit(db, team_id, current_user, "check.created", "check", check_id, request.name)
 
     # Record metrics and log business event
     metrics = get_metrics_client()
@@ -604,6 +606,10 @@ async def update_check(
         updates["nextDueAt"] = calculate_next_due(last_ping_seconds, period)
 
     updated_check = await db.update_check(team_id, check_id, updates)
+    await record_audit(
+        db, team_id, current_user, "check.updated", "check", check_id, check.name,
+        detail="changed: " + ", ".join(sorted(updates.keys())),
+    )
     return _check_detail_response(updated_check)
 
 
@@ -625,6 +631,7 @@ async def pause_check(
 
     # Update status to paused
     await db.update_check(team_id, check_id, {"status": CheckStatus.PAUSED.value})
+    await record_audit(db, team_id, current_user, "check.paused", "check", check_id, check.name)
 
     posthog = get_posthog_client()
     with new_context(client=posthog):
@@ -656,6 +663,7 @@ async def resume_check(
 
     # Update status to up
     await db.update_check(team_id, check_id, {"status": CheckStatus.UP.value})
+    await record_audit(db, team_id, current_user, "check.resumed", "check", check_id, check.name)
 
     posthog = get_posthog_client()
     with new_context(client=posthog):
@@ -691,6 +699,7 @@ async def rotate_check_token(
     # Update check with new token
     updates = {"token": new_token}
     updated_check = await db.update_check(team_id, check_id, updates)
+    await record_audit(db, team_id, current_user, "check.token_rotated", "check", check_id, check.name)
 
     return _check_detail_response(updated_check)
 
@@ -780,6 +789,7 @@ async def delete_check(
 
     # Delete check (this should cascade delete pings)
     await db.delete_check(team_id, check_id)
+    await record_audit(db, team_id, current_user, "check.deleted", "check", check_id, check.name)
 
     # Record metrics and log business event
     metrics = get_metrics_client()

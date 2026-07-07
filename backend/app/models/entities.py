@@ -142,6 +142,21 @@ class AlertDelivery(BaseModel):
     delivered_at: Optional[str] = None
 
 
+class AuditEvent(BaseModel):
+    """A recorded administrative action (who did what, to what, when)."""
+
+    event_id: str
+    team_id: str
+    actor_id: str
+    actor_email: str
+    action: str  # e.g. check.created, channel.deleted, member.role_changed
+    target_type: str  # check | channel | member | team | token | maintenance
+    target_id: str
+    target_name: Optional[str] = None
+    detail: Optional[str] = None
+    created_at: str
+
+
 class MaintenanceWindow(BaseModel):
     """Scheduled maintenance window entity."""
 

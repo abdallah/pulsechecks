@@ -11,6 +11,7 @@ from ..dependencies import AuthUser, Database, check_team_access
 from ..models import Permission
 from ..utils import get_iso_timestamp
 from ..utils.token_security import timing_safe_compare, validate_token_entropy, validate_token_format
+from ..audit import record_audit
 
 router = APIRouter(prefix="/teams/{team_id}/api-tokens", tags=["api-tokens"])
 
@@ -83,6 +84,7 @@ async def create_api_token(
     # Store in Firestore
     col = db.db.collection(COLLECTION)
     await col.document(token_id).set(doc)
+    await record_audit(db, team_id, current_user, "token.created", "token", token_id, name)
 
     return {**doc, "token": token}
 
@@ -131,4 +133,5 @@ async def revoke_api_token(
         raise HTTPException(status_code=404, detail="Token not found")
 
     await doc_ref.delete()
+    await record_audit(db, team_id, current_user, "token.revoked", "token", token_id, doc.to_dict().get("name"))
     return {"deleted": True, "token_id": token_id}

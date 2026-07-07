@@ -43,6 +43,8 @@ export default function TeamSettingsPage({ user, onLogout }) {
   const [newWebhookUrl, setNewWebhookUrl] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [confirmState, setConfirmState] = useState(null)
+  const [auditEvents, setAuditEvents] = useState([])
+  const [auditLoading, setAuditLoading] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [apiTokens, setApiTokens] = useState([])
@@ -64,6 +66,8 @@ export default function TeamSettingsPage({ user, onLogout }) {
       loadChannels()
     } else if (activeTab === 'tokens') {
       loadApiTokens()
+    } else if (activeTab === 'audit') {
+      loadAuditLog()
     } else if (activeTab === 'reports') {
       loadReports()
       loadReportChecks()
@@ -95,6 +99,18 @@ export default function TeamSettingsPage({ user, onLogout }) {
     } catch {
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadAuditLog() {
+    setAuditLoading(true)
+    try {
+      const data = await api.getTeamAuditLog(teamId)
+      setAuditEvents(Array.isArray(data) ? data : [])
+    } catch {
+      setAuditEvents([])
+    } finally {
+      setAuditLoading(false)
     }
   }
 
@@ -462,6 +478,17 @@ export default function TeamSettingsPage({ user, onLogout }) {
             >
               <FileText className="h-4 w-4 inline mr-2" />
               Reports
+            </button>
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'audit'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <FileText className="h-4 w-4 inline mr-2" />
+              Audit Log
             </button>
             <button
               onClick={() => setActiveTab('danger')}
@@ -931,6 +958,52 @@ export default function TeamSettingsPage({ user, onLogout }) {
         )}
 
         {/* Danger Zone Tab */}
+        {activeTab === 'audit' && (
+          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div className="px-4 py-5 sm:px-6">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Audit Log</h3>
+              <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                Administrative actions in this team — who did what, and when. Admins only.
+              </p>
+            </div>
+            <div className="border-t border-gray-200">
+              {auditLoading ? (
+                <div className="px-4 py-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                </div>
+              ) : auditEvents.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-gray-500">
+                  No recorded actions yet
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-200">
+                  {auditEvents.map((event) => (
+                    <li key={event.eventId} className="px-4 py-3">
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm text-gray-900">
+                            <span className="font-medium">{event.actorEmail}</span>
+                            <span className="mx-1.5 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                              {event.action}
+                            </span>
+                            {event.targetName || event.targetId}
+                          </p>
+                          {event.detail && (
+                            <p className="text-xs text-gray-500 mt-0.5">{event.detail}</p>
+                          )}
+                        </div>
+                        <span className="text-sm text-gray-500 flex-shrink-0 ml-4" title={new Date(event.createdAt).toLocaleString()}>
+                          {new Date(event.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'danger' && (
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
             <div className="px-4 py-5 sm:px-6">

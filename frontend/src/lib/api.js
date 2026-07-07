@@ -202,6 +202,11 @@ class ApiClient {
     return this.request(`/teams/${team_id}/checks/${check_id}/stats?${params}`)
   }
 
+  async getTeamAuditLog(team_id, limit = 100) {
+    const params = new URLSearchParams({ limit })
+    return this.request(`/teams/${team_id}/audit?${params}`)
+  }
+
   async getCheckAlertHistory(team_id, check_id, limit = 50) {
     const params = new URLSearchParams({ limit })
     return this.request(`/teams/${team_id}/checks/${check_id}/alert-history?${params}`)

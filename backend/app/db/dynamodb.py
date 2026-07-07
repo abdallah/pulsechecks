@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from contextlib import asynccontextmanager
 
 from ..config import get_settings
-from ..models import User, Team, TeamMember, Check, Ping, Role, CheckStatus, PendingInvitation, AlertChannel, AlertChannelType, AlertDelivery, MaintenanceWindow, Report
+from ..models import User, Team, TeamMember, Check, Ping, Role, CheckStatus, PendingInvitation, AlertChannel, AlertChannelType, AlertDelivery, AuditEvent, MaintenanceWindow, Report
 from ..errors import PulsechecksError
 from ..utils import get_iso_timestamp, get_current_time_seconds
 from ..utils.retry import with_retry, RetryConfig
@@ -583,6 +583,57 @@ class DynamoDBClient(DatabaseInterface):
             await table.delete_item(
                 Key={"PK": f"TEAM#{team_id}", "SK": f"MAINTENANCE#{window_id}"}
             )
+
+    # Audit log operations
+
+    async def create_audit_event(self, event: AuditEvent) -> None:
+        """Persist an audit event."""
+        settings = get_settings()
+        ttl = get_current_time_seconds() + (settings.ping_retention_days * 24 * 60 * 60)
+        async with self._get_table() as table:
+            await table.put_item(Item={
+                "PK": f"TEAM#{event.team_id}",
+                "SK": f"AUDIT#{event.created_at}#{event.event_id}",
+                "eventId": event.event_id,
+                "teamId": event.team_id,
+                "actorId": event.actor_id,
+                "actorEmail": event.actor_email,
+                "action": event.action,
+                "targetType": event.target_type,
+                "targetId": event.target_id,
+                "targetName": event.target_name,
+                "detail": event.detail,
+                "createdAt": event.created_at,
+                "TTL": ttl,
+            })
+
+    async def list_audit_events(self, team_id: str, limit: int = 100) -> List[AuditEvent]:
+        """List audit events for a team, newest first."""
+        async with self._get_table() as table:
+            response = await table.query(
+                KeyConditionExpression="PK = :pk AND begins_with(SK, :sk_prefix)",
+                ExpressionAttributeValues={
+                    ":pk": f"TEAM#{team_id}",
+                    ":sk_prefix": "AUDIT#",
+                },
+                ScanIndexForward=False,
+                Limit=limit,
+            )
+            return [
+                AuditEvent(
+                    event_id=item["eventId"],
+                    team_id=item["teamId"],
+                    actor_id=item["actorId"],
+                    actor_email=item["actorEmail"],
+                    action=item["action"],
+                    target_type=item["targetType"],
+                    target_id=item["targetId"],
+                    target_name=item.get("targetName"),
+                    detail=item.get("detail"),
+                    created_at=item["createdAt"],
+                )
+                for item in response.get("Items", [])
+            ]
 
     # Alert delivery queue / history operations
 

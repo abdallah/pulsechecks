@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from ..config import get_settings
 from ..models import (
     User, Team, TeamMember, Check, Ping, Role, CheckStatus,
-    PendingInvitation, AlertChannel, AlertChannelType, AlertDelivery, MaintenanceWindow, Report
+    PendingInvitation, AlertChannel, AlertChannelType, AlertDelivery, AuditEvent, MaintenanceWindow, Report
 )
 from ..errors import PulsechecksError
 from ..utils import get_iso_timestamp, get_current_time_seconds
@@ -691,6 +691,51 @@ class FirestoreClient(DatabaseInterface):
         doc_ref = (self.db.collection('teams').document(team_id)
                    .collection('maintenance').document(window_id))
         await doc_ref.delete()
+
+    # Audit log operations
+
+    async def create_audit_event(self, event: AuditEvent) -> None:
+        """Persist an audit event."""
+        settings = get_settings()
+        ttl_seconds = get_current_time_seconds() + (settings.ping_retention_days * 24 * 60 * 60)
+        doc_ref = (self.db.collection('teams').document(event.team_id)
+                   .collection('audit').document(event.event_id))
+        await doc_ref.set({
+            'eventId': event.event_id,
+            'teamId': event.team_id,
+            'actorId': event.actor_id,
+            'actorEmail': event.actor_email,
+            'action': event.action,
+            'targetType': event.target_type,
+            'targetId': event.target_id,
+            'targetName': event.target_name,
+            'detail': event.detail,
+            'createdAt': event.created_at,
+            'ttl': datetime.fromtimestamp(ttl_seconds, tz=timezone.utc),
+        })
+
+    async def list_audit_events(self, team_id: str, limit: int = 100) -> List[AuditEvent]:
+        """List audit events for a team, newest first."""
+        query = (self.db.collection('teams').document(team_id)
+                 .collection('audit')
+                 .order_by('createdAt', direction='DESCENDING')
+                 .limit(limit))
+        events = []
+        async for doc in query.stream():
+            data = doc.to_dict()
+            events.append(AuditEvent(
+                event_id=data['eventId'],
+                team_id=data['teamId'],
+                actor_id=data['actorId'],
+                actor_email=data['actorEmail'],
+                action=data['action'],
+                target_type=data['targetType'],
+                target_id=data['targetId'],
+                target_name=data.get('targetName'),
+                detail=data.get('detail'),
+                created_at=data['createdAt'],
+            ))
+        return events
 
     # Alert delivery queue / history operations
 

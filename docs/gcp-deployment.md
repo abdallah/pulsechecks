@@ -171,6 +171,7 @@ The Cloud Run service will be configured with these environment variables (set a
 - `ALLOWED_EMAIL_DOMAINS=example.com`
 - `DEBUG=false`
 - `PING_RETENTION_DAYS=90` (optional — how long ping history is kept; default 90)
+- `HEARTBEAT_URL=` (optional — external dead-man's-switch pinged after each late-detection run; point it at an independent monitor such as a healthchecks.io check)
 
 ### Frontend Environment Variables
 

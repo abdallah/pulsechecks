@@ -11,40 +11,34 @@ from .utils import get_iso_timestamp, get_current_time_seconds, calculate_next_d
 logger = get_logger(__name__)
 
 HTTP_TIMEOUT = 10  # seconds
+POLL_CONCURRENCY = 10  # max simultaneous outbound HTTP probes
 
 
 async def poll_http_checks():
-    """Poll all active HTTP checks that are due."""
+    """Poll active HTTP checks that are due.
+
+    Due-filtering happens in the database (indexed on Firestore) so the
+    poller only sees actionable checks, and probes run under a bounded
+    concurrency cap so a large fleet of slow endpoints can't exhaust
+    connections or blow past the scheduler window.
+    """
     db = create_db_client()
-    all_checks = await db.list_all_http_checks()
-
-    if not all_checks:
-        return
-
-    # Only poll checks that are actually due (next_due_at <= now)
     now = get_current_time_seconds()
-    due_checks = []
-    for check in all_checks:
-        if check.next_due_at is None:
-            # Never been polled — poll now
-            due_checks.append(check)
-        else:
-            try:
-                from datetime import datetime, timezone
-                due_dt = datetime.fromisoformat(check.next_due_at.replace("Z", "+00:00"))
-                if due_dt.timestamp() <= now:
-                    due_checks.append(check)
-            except Exception:
-                due_checks.append(check)
+    due_checks = await db.query_due_http_checks(now)
 
     if not due_checks:
         return
 
-    logger.info(f"HTTP poller: {len(due_checks)} checks due out of {len(all_checks)} total")
+    logger.info(f"HTTP poller: {len(due_checks)} checks due")
+
+    semaphore = asyncio.Semaphore(POLL_CONCURRENCY)
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False) as client:
-        tasks = [_poll_single_check(client, db, check) for check in due_checks]
-        await asyncio.gather(*tasks, return_exceptions=True)
+        async def _bounded_poll(check):
+            async with semaphore:
+                await _poll_single_check(client, db, check)
+
+        await asyncio.gather(*(_bounded_poll(check) for check in due_checks), return_exceptions=True)
 
 
 async def _poll_single_check(client, db, check):

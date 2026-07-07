@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "checks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "nextDueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "alertDeliveries",
       "queryScope": "COLLECTION",
       "fields": [

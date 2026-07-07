@@ -869,6 +869,36 @@ class FirestoreClient(DatabaseInterface):
 
         return checks
 
+    async def query_due_http_checks(self, current_time_seconds: int, limit: int = 500) -> List[Check]:
+        """Query active HTTP checks due for polling (next_due_at missing or <= now).
+
+        Uses the (type, nextDueAt) composite index instead of streaming
+        every HTTP check on every poll cycle.
+        """
+        checks_ref = self.db.collection('checks')
+        checks = []
+
+        due_query = (checks_ref
+                     .where('type', '==', 'http')
+                     .where('nextDueAt', '<=', current_time_seconds)
+                     .limit(limit))
+        async for doc in due_query.stream():
+            check = self._dict_to_check(doc.to_dict())
+            if check.status != CheckStatus.PAUSED.value:
+                checks.append(check)
+
+        # Never-polled checks have no nextDueAt yet
+        new_query = (checks_ref
+                     .where('type', '==', 'http')
+                     .where('nextDueAt', '==', None)
+                     .limit(limit))
+        async for doc in new_query.stream():
+            check = self._dict_to_check(doc.to_dict())
+            if check.status != CheckStatus.PAUSED.value:
+                checks.append(check)
+
+        return checks
+
     async def list_all_http_checks(self) -> List[Check]:
         """List all active HTTP checks (type=http, status != paused)."""
         checks_ref = self.db.collection('checks')

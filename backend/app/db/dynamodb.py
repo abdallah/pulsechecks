@@ -883,6 +883,24 @@ class DynamoDBClient(DatabaseInterface):
             tags=item.get("tags", []),
         )
 
+    async def query_due_http_checks(self, current_time_seconds: int, limit: int = 500) -> List[Check]:
+        """Query active HTTP checks due for polling (next_due_at missing or <= now).
+
+        Still scan-based (acceptable at current AWS scale) but the due
+        filter now runs server-side so only actionable items return.
+        """
+        async with self._get_table() as table:
+            response = await table.scan(
+                FilterExpression=(
+                    "attribute_exists(#type) AND #type = :http AND #status <> :paused "
+                    "AND (attribute_not_exists(nextDueAt) OR nextDueAt <= :now)"
+                ),
+                ExpressionAttributeNames={"#type": "type", "#status": "status"},
+                ExpressionAttributeValues={":http": "http", ":paused": "paused", ":now": current_time_seconds},
+            )
+            items = response.get("Items", [])
+            return [self._item_to_check(item) for item in items if "checkId" in item][:limit]
+
     async def list_all_http_checks(self) -> List[Check]:
         """List all active HTTP checks (type=http, status != paused)."""
         async with self._get_table() as table:

@@ -66,6 +66,13 @@ resource "google_cloud_run_service" "pulsechecks_api" {
           value = "https://${var.domain_name}"
         }
 
+        # Dead-man's-switch: external heartbeat pinged after each
+        # late-detection run (optional)
+        env {
+          name  = "HEARTBEAT_URL"
+          value = var.heartbeat_url
+        }
+
         # SMTP for email alert channels (optional — email channels are
         # unavailable until these are set)
         env {

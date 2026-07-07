@@ -170,6 +170,7 @@ resource "aws_lambda_function" "late_detector" {
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.pulsechecks.name
+      HEARTBEAT_URL  = var.heartbeat_url
       SMTP_HOST      = var.smtp_host
       SMTP_PORT      = var.smtp_port
       SMTP_USERNAME  = var.smtp_username

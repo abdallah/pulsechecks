@@ -278,6 +278,11 @@ class DatabaseInterface(ABC):
         pass
 
     @abstractmethod
+    async def query_due_http_checks(self, current_time_seconds: int, limit: int = 500) -> List[Check]:
+        """Query active HTTP checks due for polling (next_due_at missing or <= now)."""
+        pass
+
+    @abstractmethod
     async def list_all_http_checks(self) -> List[Check]:
         """List all active HTTP checks (type=http, status != paused)."""
         pass

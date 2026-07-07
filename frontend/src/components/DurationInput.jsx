@@ -9,6 +9,7 @@
  *   min         - minimum value in seconds (default 0)
  *   required    - whether the input is required
  *   className   - additional class names for the wrapper div
+ *   presets     - optional array of {label, seconds} quick-select chips
  */
 import { useState } from 'react'
 
@@ -20,7 +21,7 @@ function bestUnit(seconds) {
 
 const MULTIPLIERS = { minutes: 60, hours: 3600, days: 86400 }
 
-export default function DurationInput({ value, onChange, id, min = 0, required = false, className = '' }) {
+export default function DurationInput({ value, onChange, id, min = 0, required = false, className = '', presets = null }) {
   // Initialise from prop once — parent must change `key` to reset
   const [unit, setUnit] = useState(() => bestUnit(value))
   const [display, setDisplay] = useState(() => Math.round(value / MULTIPLIERS[bestUnit(value)]))
@@ -29,6 +30,13 @@ export default function DurationInput({ value, onChange, id, min = 0, required =
     const num = parseInt(e.target.value) || 0
     setDisplay(num)
     onChange(num * MULTIPLIERS[unit])
+  }
+
+  function applyPreset(seconds) {
+    const newUnit = bestUnit(seconds)
+    setUnit(newUnit)
+    setDisplay(Math.round(seconds / MULTIPLIERS[newUnit]))
+    onChange(seconds)
   }
 
   function handleUnitChange(e) {
@@ -44,7 +52,8 @@ export default function DurationInput({ value, onChange, id, min = 0, required =
   const minDisplay = Math.max(0, Math.ceil(min / MULTIPLIERS[unit]))
 
   return (
-    <div className={`flex gap-2 ${className}`}>
+    <div className={className}>
+      <div className="flex gap-2">
       <input
         type="number"
         id={id}
@@ -64,6 +73,25 @@ export default function DurationInput({ value, onChange, id, min = 0, required =
         <option value="hours">hrs</option>
         <option value="days">days</option>
       </select>
+      </div>
+      {presets && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {presets.map(({ label, seconds }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => applyPreset(seconds)}
+              className={`px-2 py-0.5 text-xs rounded-full border ${
+                display * MULTIPLIERS[unit] === seconds
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

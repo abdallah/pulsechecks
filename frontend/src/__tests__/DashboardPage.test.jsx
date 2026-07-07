@@ -87,7 +87,7 @@ describe('DashboardPage', () => {
       expect(screen.getByText('No teams')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Get started by creating a new team.')).toBeInTheDocument();
+    expect(screen.getByText(/Teams group your checks and members/)).toBeInTheDocument();
   });
 
   test('renders page title', async () => {

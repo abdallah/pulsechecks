@@ -189,15 +189,6 @@ export default function DashboardPage({ user, onLogout }) {
             </div>
             <div className="flex space-x-3">
               <button
-                onClick={() => navigate('/shared-alerts')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5-5-5h5v-12h5v12z" />
-                </svg>
-                Shared Alerts
-              </button>
-              <button
                 onClick={() => setShowCreateTeam(true)}
                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
@@ -275,7 +266,14 @@ export default function DashboardPage({ user, onLogout }) {
           <div className="text-center py-12 bg-white shadow sm:rounded-lg">
             <Users className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No teams</h3>
-            <p className="mt-1 text-sm text-gray-500">Get started by creating a new team.</p>
+            <p className="mt-1 text-sm text-gray-500">Teams group your checks and members. Create one to start monitoring.</p>
+            <button
+              onClick={() => setShowCreateTeam(true)}
+              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+              Create your first team
+            </button>
           </div>
         ) : (
           viewMode === 'grid' ? (

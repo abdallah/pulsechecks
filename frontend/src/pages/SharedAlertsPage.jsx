@@ -138,7 +138,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
 
   if (loading) {
     return (
-      <Layout user={user} onLogout={onLogout}>
+      <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Shared Alerts' }]}>
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
         </div>
@@ -147,7 +147,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
   }
 
   return (
-    <Layout user={user} onLogout={onLogout}>
+    <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Dashboard', to: '/' }, { label: 'Shared Alerts' }]}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex items-center mb-4">
@@ -348,7 +348,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
             <Bell className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No shared alert channels</h3>
             <p className="mt-1 text-sm text-gray-500">
-              Create shared alert channels in team settings to see them here.
+              No shared channels yet — create one with the button above.
             </p>
           </div>
         ) : (

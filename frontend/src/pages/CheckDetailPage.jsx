@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Copy, Pause, Play, Clock, Activity as ActivityIcon, Bell, Users, CheckCircle, Settings } from 'lucide-react'
+import { ArrowLeft, Copy, Pause, Play, Clock, Activity as ActivityIcon, Bell, Users, CheckCircle, Settings, Trash2, RotateCcw } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
@@ -55,6 +55,8 @@ export default function CheckDetailPage({ user, onLogout }) {
   const toast = useToast()
   const [check, setCheck] = useState(null)
   const [pings, setPings] = useState([])
+  const [pingsLimit, setPingsLimit] = useState(20)
+  const [loadingMorePings, setLoadingMorePings] = useState(false)
   const [stats, setStats] = useState(null)
   const [statsRange, setStatsRange] = useState('24h')
   const [statsLoading, setStatsLoading] = useState(false)
@@ -80,6 +82,7 @@ export default function CheckDetailPage({ user, onLogout }) {
   const [availableTopics, setAvailableTopics] = useState([])
   const [availableChannels, setAvailableChannels] = useState([])
   const [teamSlug, setTeamSlug] = useState(null)
+  const [teamName, setTeamName] = useState(null)
   const [showAlertSettings, setShowAlertSettings] = useState(false)
   const [showEditHttpCheck, setShowEditHttpCheck] = useState(false)
   const [editHttpData, setEditHttpData] = useState({ url: '', expectedStatusCode: 200, expectedString: '', failureThreshold: 1 })
@@ -132,10 +135,11 @@ export default function CheckDetailPage({ user, onLogout }) {
     try {
       const [checkData, pingsData, teamData] = await Promise.all([
         api.getCheck(teamId, checkId),
-        api.listPings(teamId, checkId, 20),
+        api.listPings(teamId, checkId, pingsLimit),
         api.getTeam(teamId),
       ])
       if (teamData?.slug) setTeamSlug(teamData.slug)
+      if (teamData?.name) setTeamName(teamData.name)
       // Construct pingUrl from token if not provided by backend
       if (checkData.token && !checkData.pingUrl) {
         checkData.pingUrl = `${getPingBaseUrl()}/ping/${checkData.token}`
@@ -154,6 +158,20 @@ export default function CheckDetailPage({ user, onLogout }) {
       setLoading(false)
     }
     loadAlertHistory()
+  }
+
+  async function handleLoadMorePings() {
+    const newLimit = pingsLimit + 30
+    setLoadingMorePings(true)
+    try {
+      const pingsData = await api.listPings(teamId, checkId, newLimit)
+      setPings(Array.isArray(pingsData) ? pingsData : pingsData.pings || [])
+      setPingsLimit(newLimit)
+    } catch (error) {
+      toast.error('Failed to load more pings: ' + error.message)
+    } finally {
+      setLoadingMorePings(false)
+    }
   }
 
   async function loadAlertHistory() {
@@ -495,7 +513,7 @@ export default function CheckDetailPage({ user, onLogout }) {
 
   if (loading) {
     return (
-      <Layout user={user} onLogout={onLogout}>
+      <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Teams', to: '/' }, { label: teamName || 'Team', to: `/teams/${teamId}/checks` }, { label: check?.name || 'Check' }]}>
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
         </div>
@@ -505,7 +523,7 @@ export default function CheckDetailPage({ user, onLogout }) {
 
   if (!check) {
     return (
-      <Layout user={user} onLogout={onLogout}>
+      <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Teams', to: '/' }, { label: teamName || 'Team', to: `/teams/${teamId}/checks` }, { label: check?.name || 'Check' }]}>
         <div className="text-center py-12">
           <p className="text-gray-500">Check not found</p>
         </div>
@@ -514,7 +532,7 @@ export default function CheckDetailPage({ user, onLogout }) {
   }
 
   return (
-    <Layout user={user} onLogout={onLogout}>
+    <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Teams', to: '/' }, { label: teamName || 'Team', to: `/teams/${teamId}/checks` }, { label: check?.name || 'Check' }]}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -548,7 +566,8 @@ export default function CheckDetailPage({ user, onLogout }) {
               onClick={handleDeleteCheck}
               className="inline-flex items-center px-4 py-2 border border-red-300 shadow-sm text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
             >
-              🗑️ Delete
+              <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+              Delete
             </button>
           </div>
         </div>
@@ -580,7 +599,8 @@ export default function CheckDetailPage({ user, onLogout }) {
                       className="inline-flex items-center px-2 py-1 border border-red-200 text-xs font-medium rounded text-red-600 bg-white hover:bg-red-50"
                       title="Rotate Token (invalidates current URL)"
                     >
-                      🔄 Rotate token
+                      <RotateCcw className="h-3 w-3 mr-1" aria-hidden="true" />
+              Rotate token
                     </button>
                   </dt>
                   <dd className="mt-1 flex items-center space-x-2">
@@ -1398,13 +1418,24 @@ export default function CheckDetailPage({ user, onLogout }) {
           <div className="px-4 py-5 sm:px-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
               <ActivityIcon className="h-5 w-5 mr-2" />
-              Recent Pings (Latest 20)
+              Recent Pings
             </h3>
           </div>
           <div className="border-t border-gray-200">
             {pings.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-gray-500">
-                No pings recorded yet
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm text-gray-500">No pings recorded yet</p>
+                {check.pingUrl && (
+                  <div className="mt-3 mx-auto max-w-xl text-left bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <p className="text-sm text-blue-800 mb-1">Send your first ping:</p>
+                    <code className="block text-xs bg-white rounded px-2 py-1.5 break-all font-mono text-gray-800">
+                      curl -fsS {check.pingUrl}
+                    </code>
+                    <p className="mt-1.5 text-xs text-blue-700">
+                      Add it to the end of your cron job or script — the check goes green on the first ping.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <ul className="divide-y divide-gray-200">
@@ -1438,6 +1469,17 @@ export default function CheckDetailPage({ user, onLogout }) {
                     </div>
                   </li>
                 ))}
+                {pings.length >= pingsLimit && (
+                  <li className="px-4 py-3 text-center">
+                    <button
+                      onClick={handleLoadMorePings}
+                      disabled={loadingMorePings}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                    >
+                      {loadingMorePings ? 'Loading…' : 'Load more pings'}
+                    </button>
+                  </li>
+                )}
               </ul>
             )}
           </div>

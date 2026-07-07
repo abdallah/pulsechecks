@@ -397,7 +397,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
 
   if (loading) {
     return (
-      <Layout user={user} onLogout={onLogout}>
+      <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Teams', to: '/' }, { label: team?.name || 'Team', to: `/teams/${teamId}/checks` }, { label: 'Settings' }]}>
         <div className="flex justify-center items-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
@@ -406,7 +406,7 @@ export default function TeamSettingsPage({ user, onLogout }) {
   }
 
   return (
-    <Layout user={user} onLogout={onLogout}>
+    <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Teams', to: '/' }, { label: team?.name || 'Team', to: `/teams/${teamId}/checks` }, { label: 'Settings' }]}>
       <div className="space-y-6">
         <div className="flex items-center space-x-4">
           <button

@@ -33,7 +33,7 @@ describe('LoginPage', () => {
   test('renders security information', () => {
     renderWithRouter(<LoginPage />);
     
-    expect(screen.getByText('Secure authentication via AWS Cognito')).toBeInTheDocument();
+    expect(screen.getByText('Secure authentication via Google Workspace SSO')).toBeInTheDocument();
     expect(screen.getByText('Domain-restricted access')).toBeInTheDocument();
   });
 });

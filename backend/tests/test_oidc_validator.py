@@ -188,8 +188,8 @@ class TestValidateOIDCToken:
 
         assert "audience" in str(exc_info.value).lower()
 
-    def test_wrong_audience_allowed_with_expected_service_account(self):
-        """Test audience mismatch fallback when the scheduler service account is explicitly enforced."""
+    def test_wrong_audience_rejected_even_with_expected_service_account(self):
+        """Audience mismatch must fail closed even when the scheduler service account matches."""
         private_key_pem, public_pem = _generate_test_key_pair()
 
         token = _create_test_token(private_key_pem, audience="https://different-audience.run.app")
@@ -199,13 +199,12 @@ class TestValidateOIDCToken:
         mock_certs = {"test-key-id-1": public_pem}
 
         with patch('app.oidc_validator._get_google_certs', return_value=mock_certs):
-            claims = validate_oidc_token(
-                token,
-                expected_audience=expected_audience,
-                expected_service_account=expected_sa,
-            )
-
-        assert claims["email"] == expected_sa
+            with pytest.raises(InvalidAudienceError):
+                validate_oidc_token(
+                    token,
+                    expected_audience=expected_audience,
+                    expected_service_account=expected_sa,
+                )
 
     def test_audience_with_trailing_slash(self):
         """Test validation when token audience adds a trailing slash."""

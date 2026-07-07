@@ -455,6 +455,7 @@ def test_list_check_pings_without_since(mock_create_db, mock_verify, client, moc
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User"
     }
 
@@ -522,6 +523,7 @@ def test_list_check_pings_with_since(mock_create_db, mock_verify, client, mock_u
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User"
     }
 
@@ -590,6 +592,7 @@ def test_list_check_pings_with_type_filter(mock_create_db, mock_verify, client, 
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User"
     }
 
@@ -653,6 +656,7 @@ def test_list_check_pings_check_not_found(mock_create_db, mock_verify, client, m
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User"
     }
 
@@ -690,6 +694,7 @@ def test_get_check_stats(mock_verify, mock_create_db, client, mock_jwt_token):
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User",
     }
 
@@ -767,6 +772,7 @@ def test_get_check_error_summary(mock_verify, mock_create_db, client, mock_jwt_t
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User",
     }
 
@@ -861,6 +867,7 @@ def test_get_check_uptime(mock_create_db, mock_verify, client, mock_jwt_token):
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User",
     }
 
@@ -948,6 +955,7 @@ def test_create_maintenance_window(mock_create_db, mock_verify, client, mock_jwt
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User",
     }
 
@@ -997,6 +1005,7 @@ def test_list_maintenance_windows(mock_create_db, mock_verify, client, mock_jwt_
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User",
     }
 
@@ -1052,6 +1061,7 @@ def test_create_report(mock_create_db, mock_verify, client, mock_jwt_token):
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User",
     }
 
@@ -1137,6 +1147,7 @@ def test_download_report(mock_create_db, mock_verify, client, mock_jwt_token):
     mock_verify.return_value = {
         "sub": "user-123",
         "email": "test@example.com",
+        "email_verified": True,
         "name": "Test User",
     }
 

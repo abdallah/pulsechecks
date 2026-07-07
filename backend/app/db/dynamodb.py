@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from contextlib import asynccontextmanager
 
 from ..config import get_settings
-from ..models import User, Team, TeamMember, Check, Ping, Role, CheckStatus, PendingInvitation, AlertChannel, AlertChannelType, MaintenanceWindow, Report
+from ..models import User, Team, TeamMember, Check, Ping, Role, CheckStatus, PendingInvitation, AlertChannel, AlertChannelType, AlertDelivery, MaintenanceWindow, Report
 from ..errors import PulsechecksError
 from ..utils import get_iso_timestamp, get_current_time_seconds
 from ..utils.retry import with_retry, RetryConfig
@@ -575,6 +575,136 @@ class DynamoDBClient(DatabaseInterface):
             await table.delete_item(
                 Key={"PK": f"TEAM#{team_id}", "SK": f"MAINTENANCE#{window_id}"}
             )
+
+    # Alert delivery queue / history operations
+
+    def _delivery_sk(self, delivery: AlertDelivery) -> str:
+        return f"ALERTDELIV#{delivery.created_at}#{delivery.delivery_id}"
+
+    @staticmethod
+    def _item_to_delivery(item: Dict[str, Any]) -> AlertDelivery:
+        return AlertDelivery(
+            delivery_id=item["deliveryId"],
+            team_id=item["teamId"],
+            check_id=item["checkId"],
+            check_name=item.get("checkName", ""),
+            channel_id=item["channelId"],
+            channel_type=item.get("channelType", ""),
+            channel_name=item.get("channelName", ""),
+            alert_type=item.get("alertType", "late"),
+            status=item.get("deliveryStatus", "pending"),
+            attempts=int(item.get("attempts", 0)),
+            max_attempts=int(item.get("maxAttempts", 5)),
+            next_attempt_at=int(item.get("nextAttemptAt", 0)),
+            last_error=item.get("lastError"),
+            created_at=item["createdAt"],
+            delivered_at=item.get("deliveredAt"),
+        )
+
+    async def create_alert_delivery(self, delivery: AlertDelivery) -> None:
+        """Persist a new alert delivery record."""
+        settings = get_settings()
+        ttl = get_current_time_seconds() + (settings.ping_retention_days * 24 * 60 * 60)
+        item = {
+            "PK": f"TEAM#{delivery.team_id}",
+            "SK": self._delivery_sk(delivery),
+            "deliveryId": delivery.delivery_id,
+            "teamId": delivery.team_id,
+            "checkId": delivery.check_id,
+            "checkName": delivery.check_name,
+            "channelId": delivery.channel_id,
+            "channelType": delivery.channel_type,
+            "channelName": delivery.channel_name,
+            "alertType": delivery.alert_type,
+            "deliveryStatus": delivery.status,
+            "attempts": delivery.attempts,
+            "maxAttempts": delivery.max_attempts,
+            "nextAttemptAt": delivery.next_attempt_at,
+            "createdAt": delivery.created_at,
+            "TTL": ttl,
+        }
+        if delivery.last_error:
+            item["lastError"] = delivery.last_error
+        if delivery.delivered_at:
+            item["deliveredAt"] = delivery.delivered_at
+        if delivery.status == "pending":
+            # Pending deliveries live in the DueIndex under their own
+            # partition so the worker can query them by next_attempt_at.
+            item["GSI1PK"] = "PENDING_DELIVERY"
+            item["GSI1SK"] = delivery.next_attempt_at
+        async with self._get_table() as table:
+            await table.put_item(Item=item)
+
+    async def update_alert_delivery(self, delivery: AlertDelivery) -> None:
+        """Update an alert delivery's status/attempt fields."""
+        set_parts = [
+            "deliveryStatus = :status",
+            "attempts = :attempts",
+            "nextAttemptAt = :next_attempt",
+        ]
+        values = {
+            ":status": delivery.status,
+            ":attempts": delivery.attempts,
+            ":next_attempt": delivery.next_attempt_at,
+        }
+        remove_parts = []
+        if delivery.last_error is not None:
+            set_parts.append("lastError = :err")
+            values[":err"] = delivery.last_error
+        if delivery.delivered_at is not None:
+            set_parts.append("deliveredAt = :delivered")
+            values[":delivered"] = delivery.delivered_at
+        if delivery.status == "pending":
+            set_parts.append("GSI1PK = :gsi1pk")
+            set_parts.append("GSI1SK = :gsi1sk")
+            values[":gsi1pk"] = "PENDING_DELIVERY"
+            values[":gsi1sk"] = delivery.next_attempt_at
+        else:
+            # Terminal state — drop out of the pending index.
+            remove_parts = ["GSI1PK", "GSI1SK"]
+
+        update_expression = "SET " + ", ".join(set_parts)
+        if remove_parts:
+            update_expression += " REMOVE " + ", ".join(remove_parts)
+
+        async with self._get_table() as table:
+            await table.update_item(
+                Key={"PK": f"TEAM#{delivery.team_id}", "SK": self._delivery_sk(delivery)},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=values,
+            )
+
+    async def query_due_alert_deliveries(self, current_time_seconds: int, limit: int = 100) -> List[AlertDelivery]:
+        """Query pending deliveries whose next_attempt_at is due."""
+        async with self._get_table() as table:
+            response = await table.query(
+                IndexName="DueIndex",
+                KeyConditionExpression="GSI1PK = :pk AND GSI1SK <= :time",
+                ExpressionAttributeValues={
+                    ":pk": "PENDING_DELIVERY",
+                    ":time": current_time_seconds,
+                },
+                Limit=limit,
+            )
+            return [self._item_to_delivery(item) for item in response.get("Items", [])]
+
+    async def list_alert_deliveries(self, team_id: str, check_id: str | None = None, limit: int = 50) -> List[AlertDelivery]:
+        """List delivery history for a team (optionally one check), newest first."""
+        async with self._get_table() as table:
+            kwargs = {
+                "KeyConditionExpression": "PK = :pk AND begins_with(SK, :sk_prefix)",
+                "ExpressionAttributeValues": {
+                    ":pk": f"TEAM#{team_id}",
+                    ":sk_prefix": "ALERTDELIV#",
+                },
+                "ScanIndexForward": False,
+                "Limit": limit,
+            }
+            if check_id:
+                kwargs["FilterExpression"] = "checkId = :check_id"
+                kwargs["ExpressionAttributeValues"][":check_id"] = check_id
+            response = await table.query(**kwargs)
+            return [self._item_to_delivery(item) for item in response.get("Items", [])]
 
     async def create_report(self, report: Report) -> None:
         """Persist a generated report record."""

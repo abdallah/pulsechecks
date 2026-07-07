@@ -20,6 +20,7 @@ vi.mock('../lib/api', () => ({
     listAlertChannels: vi.fn(),
     listTeams: vi.fn(),
     updateCheck: vi.fn(),
+    getCheckAlertHistory: vi.fn().mockResolvedValue([]),
   }
 }))
 

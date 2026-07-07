@@ -51,6 +51,31 @@ curl -X POST https://api.pulsechecks.example.com/ping/test-token \
   -d "Health check test"
 ```
 
+## Alert Delivery Pipeline
+
+Every alert (late / recovery / escalation) is written as a durable
+`AlertDelivery` record before any notification is attempted — one record per
+target channel. The record is both the queue item and the permanent history
+entry shown in the check's "Alert History" section.
+
+**Lifecycle:**
+- `pending` — enqueued; attempted immediately in scheduler context, or picked
+  up by the next late-detection run (≤2 minutes) when enqueued from the ping
+  endpoint's recovery path (which never blocks on outbound calls).
+- Failed attempts retry with exponential backoff: 2m, 4m, 8m, 16m after each
+  failure — 5 attempts spanning ~30 minutes.
+- `delivered` — terminal success, with `deliveredAt`.
+- `failed` — terminal dead-letter state after `maxAttempts` (or immediately
+  if the channel/check no longer exists), with `lastError` preserved.
+
+**Monitoring:** each exhausted delivery emits the `AlertDeliveryExhausted`
+metric (dimension: `ChannelType`) and an `alert_delivery_exhausted` business
+log event. Alarm on this metric — it means a user did not get an alert they
+configured.
+
+**Retention:** delivery records expire with the same TTL as pings
+(`PING_RETENTION_DAYS`, default 90 days).
+
 ## Troubleshooting
 
 ### Common Issues

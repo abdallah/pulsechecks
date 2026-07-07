@@ -5,7 +5,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from botocore.exceptions import ClientError
 
 from app.handlers import late_detector_handler
-from app.models import Check, CheckStatus
+from app.models import Check, CheckStatus, AlertChannel, AlertChannelType
+
+
+def _sample_channel():
+    return AlertChannel(
+        channel_id="test-channel-id",
+        team_id="team-123",
+        name="test-channel",
+        display_name="Test Channel",
+        type=AlertChannelType.MATTERMOST,
+        configuration={"webhook_url": "https://chat.example.com/hooks/x"},
+        shared=False,
+        created_at="2023-01-01T00:00:00Z",
+        created_by="user-1",
+    )
 
 
 @pytest.fixture
@@ -129,20 +143,29 @@ class TestLateDetectorHandler:
         mock_db = AsyncMock()
         mock_db.query_due_checks.return_value = [sample_check]
         mock_db.update_check_to_late.return_value = True  # Successfully went late
+        mock_db.get_alert_channel.return_value = _sample_channel()
+        mock_db.query_due_alert_deliveries.return_value = []
         mock_create_db.return_value = mock_db
 
         mock_sns = MagicMock()
         mock_boto3.return_value = mock_sns
 
-        # Execute handler
-        result = late_detector_handler(eventbridge_event, lambda_context)
+        # Execute handler with channel send succeeding
+        with patch("app.handlers._send_channel_alert", new=AsyncMock(return_value=True)):
+            result = late_detector_handler(eventbridge_event, lambda_context)
 
         # Verify result
         assert result["statusCode"] == 200
         body = json.loads(result["body"])
         assert body["checksProcessed"] == 1
-        assert body["channelAlertsQueued"] == 0  # No channels - using modern alert channels only
-        assert body["channelAlertsSent"] == 0  # No channels configured
+        assert body["channelAlertsQueued"] == 1  # One delivery record enqueued
+        assert body["channelAlertsSent"] == 1    # Delivered on first attempt
+
+        # A durable delivery record was created and marked delivered
+        mock_db.create_alert_delivery.assert_called_once()
+        mock_db.update_alert_delivery.assert_called_once()
+        updated = mock_db.update_alert_delivery.call_args[0][0]
+        assert updated.status == "delivered"
 
         # Verify database operations
         mock_db.query_due_checks.assert_called_once_with(1672531200, limit=100)
@@ -170,6 +193,7 @@ class TestLateDetectorHandler:
         mock_db = AsyncMock()
         mock_db.query_due_checks.return_value = [sample_check]
         mock_db.update_check_to_late.return_value = False  # Already late
+        mock_db.query_due_alert_deliveries.return_value = []
         mock_create_db.return_value = mock_db
 
         mock_sns = MagicMock()
@@ -206,23 +230,29 @@ class TestLateDetectorHandler:
         mock_db = AsyncMock()
         mock_db.query_due_checks.return_value = [sample_check]
         mock_db.update_check_to_late.return_value = True
+        mock_db.get_alert_channel.return_value = _sample_channel()
+        mock_db.query_due_alert_deliveries.return_value = []
         mock_create_db.return_value = mock_db
 
         mock_sns = MagicMock()
-        mock_sns.publish.side_effect = ClientError(
-            {'Error': {'Code': 'InvalidParameter'}}, 'Publish'
-        )
         mock_boto3.return_value = mock_sns
 
-        # Execute handler (should not raise exception)
-        result = late_detector_handler(eventbridge_event, lambda_context)
+        # Execute handler with channel send failing (should not raise)
+        with patch("app.handlers._send_channel_alert", new=AsyncMock(return_value=False)):
+            result = late_detector_handler(eventbridge_event, lambda_context)
 
         # Verify result
         assert result["statusCode"] == 200
         body = json.loads(result["body"])
         assert body["checksProcessed"] == 1
-        assert body["channelAlertsQueued"] == 0  # Failed to queue alert
-        assert body["channelAlertsSent"] == 0
+        assert body["channelAlertsQueued"] == 1  # Enqueued durably
+        assert body["channelAlertsSent"] == 0    # First attempt failed
+
+        # Delivery stays pending with a retry scheduled via backoff
+        updated = mock_db.update_alert_delivery.call_args[0][0]
+        assert updated.status == "pending"
+        assert updated.attempts == 1
+        assert updated.next_attempt_at > 0
 
     @patch('app.handlers.get_settings')
     @patch('app.handlers.create_db_client')

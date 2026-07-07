@@ -13,12 +13,21 @@ class MetricsClient:
     
     def __init__(self):
         self.settings = get_settings()
-        self.cloudwatch = boto3.client('cloudwatch', region_name=self.settings.aws_region)
+        # CloudWatch custom metrics are AWS-only. On GCP, observability
+        # comes from structured logs (log_business_event) consumed by
+        # log-based metrics — skip CloudWatch entirely to avoid a failed
+        # (and error-logged) API call on every metric emission.
+        if self.settings.cloud_provider == 'aws':
+            self.cloudwatch = boto3.client('cloudwatch', region_name=self.settings.aws_region)
+        else:
+            self.cloudwatch = None
         self.namespace = 'Pulsechecks'
-    
-    def put_metric(self, metric_name: str, value: float, unit: str = 'Count', 
+
+    def put_metric(self, metric_name: str, value: float, unit: str = 'Count',
                    dimensions: Optional[Dict[str, str]] = None):
         """Put a custom metric to CloudWatch."""
+        if self.cloudwatch is None:
+            return
         try:
             metric_data = {
                 'MetricName': metric_name,

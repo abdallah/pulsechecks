@@ -74,6 +74,7 @@ export default function CheckDetailPage({ user, onLogout }) {
   const [selectedPing, setSelectedPing] = useState(null)
   const [showTokenRotated, setShowTokenRotated] = useState(false)
   const [confirmState, setConfirmState] = useState(null)
+  const [alertHistory, setAlertHistory] = useState([])
   const [availableTopics, setAvailableTopics] = useState([])
   const [availableChannels, setAvailableChannels] = useState([])
   const [teamSlug, setTeamSlug] = useState(null)
@@ -143,6 +144,16 @@ export default function CheckDetailPage({ user, onLogout }) {
     } catch {
     } finally {
       setLoading(false)
+    }
+    loadAlertHistory()
+  }
+
+  async function loadAlertHistory() {
+    try {
+      const history = await api.getCheckAlertHistory(teamId, checkId, 25)
+      setAlertHistory(Array.isArray(history) ? history : [])
+    } catch {
+      setAlertHistory([])
     }
   }
 
@@ -1199,6 +1210,69 @@ export default function CheckDetailPage({ user, onLogout }) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Alert Delivery History */}
+        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-5 sm:px-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
+              <Bell className="h-5 w-5 mr-2" />
+              Alert History
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+              Every notification sent (or attempted) for this check
+            </p>
+          </div>
+          <div className="border-t border-gray-200">
+            {alertHistory.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-gray-500">
+                No alerts sent yet — that's a good sign
+              </div>
+            ) : (
+              <ul className="divide-y divide-gray-200">
+                {alertHistory.map((entry) => (
+                  <li key={entry.deliveryId} className="px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          entry.alertType === 'recovery'
+                            ? 'bg-green-100 text-green-800'
+                            : entry.alertType === 'escalation'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-red-100 text-red-800'
+                        }`}>
+                          {entry.alertType.toUpperCase()}
+                        </span>
+                        <span className="text-sm text-gray-900">
+                          {entry.channelName}
+                          <span className="ml-1 text-gray-500">({entry.channelType})</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          entry.status === 'delivered'
+                            ? 'bg-green-100 text-green-800'
+                            : entry.status === 'pending'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-red-100 text-red-800'
+                        }`}>
+                          {entry.status === 'pending' ? `RETRYING (${entry.attempts}/${entry.maxAttempts})` : entry.status.toUpperCase()}
+                        </span>
+                        <span className="text-sm text-gray-500" title={new Date(entry.createdAt).toLocaleString()}>
+                          {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                    </div>
+                    {entry.status === 'failed' && entry.lastError && (
+                      <p className="mt-1 text-xs text-red-600">
+                        Failed after {entry.attempts} {entry.attempts === 1 ? 'attempt' : 'attempts'}: {entry.lastError}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">

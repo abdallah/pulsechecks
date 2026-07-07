@@ -284,11 +284,14 @@ class TestAdvancedAlertingIntegration:
                     mock_current_time.return_value = get_current_time_seconds()  # Current time
                     with patch('app.handlers.get_metrics_client') as mock_metrics:
                         with patch('boto3.client') as mock_boto_client:
-                            with patch('app.handlers._send_escalated_alerts') as mock_escalate:
-                                result = await _late_detector_impl({}, None)
-                                
-                                # Should trigger escalation
-                                assert result["statusCode"] == 200
-                                body = eval(result["body"])
-                                assert body["escalationsTriggered"] == 1
-                                mock_escalate.assert_called_once()
+                            with patch('app.handlers.enqueue_check_alerts', new=AsyncMock(return_value=[])) as mock_enqueue:
+                                with patch('app.handlers.process_due_deliveries', new=AsyncMock(return_value={"processed": 0, "delivered": 0, "failed": 0})):
+                                    result = await _late_detector_impl({}, None)
+
+                                    # Should trigger escalation
+                                    assert result["statusCode"] == 200
+                                    body = eval(result["body"])
+                                    assert body["escalationsTriggered"] == 1
+                                    # Enqueued both the late alert and the escalation
+                                    alert_types = [c.args[2] for c in mock_enqueue.call_args_list]
+                                    assert "escalation" in alert_types

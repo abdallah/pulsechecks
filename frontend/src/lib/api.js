@@ -202,6 +202,11 @@ class ApiClient {
     return this.request(`/teams/${team_id}/checks/${check_id}/stats?${params}`)
   }
 
+  async getCheckAlertHistory(team_id, check_id, limit = 50) {
+    const params = new URLSearchParams({ limit })
+    return this.request(`/teams/${team_id}/checks/${check_id}/alert-history?${params}`)
+  }
+
   async getCheckErrorSummary(team_id, check_id, range = '24h') {
     const params = new URLSearchParams({ range })
     return this.request(`/teams/${team_id}/checks/${check_id}/errors/summary?${params}`)

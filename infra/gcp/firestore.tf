@@ -27,5 +27,73 @@ resource "google_firestore_field" "ping_ttl" {
   depends_on = [google_firestore_database.pulsechecks]
 }
 
+# TTL Policy for alert delivery history (same retention as pings)
+resource "google_firestore_field" "alert_delivery_ttl" {
+  project    = var.gcp_project_id
+  database   = google_firestore_database.pulsechecks.name
+  collection = "alertDeliveries"
+  field      = "ttl"
+
+  ttl_config {}
+
+  depends_on = [google_firestore_database.pulsechecks]
+}
+
+# Composite indexes for the alert delivery queue and history queries
+resource "google_firestore_index" "alert_deliveries_pending" {
+  project    = var.gcp_project_id
+  database   = google_firestore_database.pulsechecks.name
+  collection = "alertDeliveries"
+
+  fields {
+    field_path = "status"
+    order      = "ASCENDING"
+  }
+  fields {
+    field_path = "nextAttemptAt"
+    order      = "ASCENDING"
+  }
+
+  depends_on = [google_firestore_database.pulsechecks]
+}
+
+resource "google_firestore_index" "alert_deliveries_team_history" {
+  project    = var.gcp_project_id
+  database   = google_firestore_database.pulsechecks.name
+  collection = "alertDeliveries"
+
+  fields {
+    field_path = "teamId"
+    order      = "ASCENDING"
+  }
+  fields {
+    field_path = "createdAt"
+    order      = "DESCENDING"
+  }
+
+  depends_on = [google_firestore_database.pulsechecks]
+}
+
+resource "google_firestore_index" "alert_deliveries_check_history" {
+  project    = var.gcp_project_id
+  database   = google_firestore_database.pulsechecks.name
+  collection = "alertDeliveries"
+
+  fields {
+    field_path = "teamId"
+    order      = "ASCENDING"
+  }
+  fields {
+    field_path = "checkId"
+    order      = "ASCENDING"
+  }
+  fields {
+    field_path = "createdAt"
+    order      = "DESCENDING"
+  }
+
+  depends_on = [google_firestore_database.pulsechecks]
+}
+
 # Single-field indexes for token/teamId/alertAfterAt are managed by Firestore automatically.
 # Add google_firestore_index resources only for true composite index requirements.

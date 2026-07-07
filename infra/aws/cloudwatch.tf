@@ -183,3 +183,19 @@ resource "aws_cloudwatch_dashboard" "main" {
     ]
   })
 }
+
+# Alarm when an alert delivery exhausts all retries (dead-letter) —
+# this means a user did not receive an alert they configured.
+resource "aws_cloudwatch_metric_alarm" "alert_delivery_exhausted" {
+  alarm_name          = "pulsechecks-alert-delivery-exhausted-${var.environment}"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "AlertDeliveryExhausted"
+  namespace           = "Pulsechecks"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "1"
+  treat_missing_data  = "notBreaching"
+  alarm_description   = "An alert delivery failed permanently after all retries"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+}

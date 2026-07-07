@@ -1312,7 +1312,8 @@ def test_escalate_check_immediately(mock_create_db, mock_verify, client, mock_us
     mock_db.get_check.return_value = mock_check
     mock_db.get_team.return_value = MagicMock(name="Test Team")
 
-    with patch("app.handlers._send_escalated_alerts") as mock_escalate:
+    with patch("app.routers.checks.get_metrics_client"), \
+         patch("app.alert_dispatch.enqueue_check_alerts", new=AsyncMock(return_value=[])):
         response = client.post(
             "/teams/team-123/checks/check-456/escalate",
             headers={"Authorization": f"Bearer {mock_jwt_token}"}
@@ -1602,3 +1603,70 @@ def test_bulk_operations_empty_check_ids(mock_create_db, mock_verify, client, mo
 
     assert response.status_code == 200
     assert "Paused 0 of 0 checks" in response.json()["message"]
+
+
+@patch('app.dependencies.create_db_client')
+@patch("app.dependencies.verify_jwt_token")
+def test_get_check_alert_history(mock_verify, mock_create_db, client, mock_jwt_token):
+    """Alert history endpoint returns delivery records newest first."""
+    from app.models import AlertDelivery
+
+    mock_verify.return_value = {
+        "sub": "user-123",
+        "email": "test@example.com",
+        "email_verified": True,
+        "name": "Test User",
+    }
+
+    mock_db = MagicMock()
+    mock_create_db.return_value = mock_db
+    mock_db.get_team_member = AsyncMock(return_value=TeamMember(
+        team_id="team-123",
+        user_id="user-123",
+        role=Role.MEMBER,
+        joined_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.get_check = AsyncMock(return_value=Check(
+        check_id="check-123",
+        team_id="team-123",
+        name="Test Check",
+        token="test-token",
+        period_seconds=300,
+        grace_seconds=60,
+        status=CheckStatus.LATE,
+        created_at="2025-01-01T00:00:00Z",
+    ))
+    mock_db.list_alert_deliveries = AsyncMock(return_value=[
+        AlertDelivery(
+            delivery_id="del-1", team_id="team-123", check_id="check-123",
+            check_name="Test Check", channel_id="chan-1",
+            channel_type="mattermost", channel_name="On-call",
+            alert_type="late", status="delivered", attempts=1,
+            next_attempt_at=0, created_at="2026-01-01T00:02:00Z",
+            delivered_at="2026-01-01T00:02:01Z",
+        ),
+        AlertDelivery(
+            delivery_id="del-2", team_id="team-123", check_id="check-123",
+            check_name="Test Check", channel_id="chan-2",
+            channel_type="email", channel_name="SRE Email",
+            alert_type="late", status="failed", attempts=5,
+            next_attempt_at=0, last_error="SMTP timeout",
+            created_at="2026-01-01T00:00:00Z",
+        ),
+    ])
+
+    response = client.get(
+        "/teams/team-123/checks/check-123/alert-history",
+        headers={"Authorization": f"Bearer {mock_jwt_token}"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["deliveryId"] == "del-1"
+    assert data[0]["status"] == "delivered"
+    assert data[0]["channelName"] == "On-call"
+    assert data[1]["status"] == "failed"
+    assert data[1]["lastError"] == "SMTP timeout"
+    assert data[1]["attempts"] == 5
+    mock_db.list_alert_deliveries.assert_called_once_with("team-123", check_id="check-123", limit=50)

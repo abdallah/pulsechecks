@@ -180,3 +180,42 @@ resource "google_monitoring_alert_policy" "high_latency" {
 #     value_type  = "INT64"
 #   }
 # }
+
+# Log-based metric: alert deliveries that exhausted all retries (dead-letter).
+# Emitted as a structured business event by the backend.
+resource "google_logging_metric" "alert_delivery_exhausted" {
+  project = var.gcp_project_id
+  name    = "pulsechecks-alert-delivery-exhausted"
+  filter  = "resource.type=\"cloud_run_revision\" resource.labels.service_name=\"${google_cloud_run_service.pulsechecks_api.name}\" jsonPayload.event_type=\"alert_delivery_exhausted\""
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+  }
+}
+
+# Alert when any delivery dead-letters — a user did not receive an alert
+# they configured.
+resource "google_monitoring_alert_policy" "alert_delivery_exhausted" {
+  display_name = "Pulsechecks Alert Delivery Exhausted - ${var.environment}"
+  combiner     = "OR"
+  conditions {
+    display_name = "Alert delivery dead-lettered"
+    condition_threshold {
+      filter          = "resource.type=\"cloud_run_revision\" metric.type=\"logging.googleapis.com/user/${google_logging_metric.alert_delivery_exhausted.name}\""
+      duration        = "0s"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      aggregations {
+        alignment_period   = "300s"
+        per_series_aligner = "ALIGN_SUM"
+      }
+    }
+  }
+
+  notification_channels = [] # Add notification channels if desired
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+}

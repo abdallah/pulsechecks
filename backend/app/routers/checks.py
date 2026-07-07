@@ -311,6 +311,7 @@ def _check_detail_response(check) -> CheckDetailResponse:
         createdAt=check.created_at,
         alertChannels=check.alert_channels,
         escalationMinutes=check.escalation_minutes,
+        escalationAlertChannels=getattr(check, 'escalation_alert_channels', []) or [],
         escalationTriggeredAt=getattr(check, 'escalation_triggered_at', None),
         suppressAfterCount=getattr(check, 'suppress_after_count', None),
         suppressDurationMinutes=getattr(check, 'suppress_duration_minutes', None),
@@ -321,6 +322,7 @@ def _check_detail_response(check) -> CheckDetailResponse:
         expectedStatusCode=getattr(check, 'expected_status_code', 200),
         expectedString=getattr(check, 'expected_string', None),
         failureThreshold=getattr(check, 'failure_threshold', 1),
+        tags=getattr(check, 'tags', []) or [],
     )
 
 
@@ -450,6 +452,7 @@ async def create_check(
         expected_status_code=request.expected_status_code,
         expected_string=request.expected_string,
         failure_threshold=request.failure_threshold,
+        tags=request.tags,
     )
     # Pre-compute next_due_at for cron checks so the late detector can find them immediately
     if request.type == "cron":
@@ -510,6 +513,7 @@ async def list_team_checks(
             expectedStatusCode=check.expected_status_code,
             expectedString=getattr(check, 'expected_string', None),
             failureThreshold=getattr(check, 'failure_threshold', 1),
+            tags=getattr(check, 'tags', []) or [],
         )
         for check in checks
     ]
@@ -563,6 +567,10 @@ async def update_check(
         updates["alertChannels"] = request.alert_channels
     if request.escalation_minutes is not None:
         updates["escalationMinutes"] = request.escalation_minutes
+    if request.escalation_alert_channels is not None:
+        updates["escalationAlertChannels"] = request.escalation_alert_channels
+    if request.tags is not None:
+        updates["tags"] = request.tags
     if request.suppress_after_count is not None:
         updates["suppressAfterCount"] = request.suppress_after_count
     if request.suppress_duration_minutes is not None:

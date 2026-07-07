@@ -43,6 +43,23 @@ class CreateCheckRequest(BaseModel):
     expected_status_code: int = Field(default=200, ge=100, le=599, alias="expectedStatusCode", description="Expected HTTP status code")
     expected_string: Optional[str] = Field(None, max_length=1000, alias="expectedString", description="Expected string in response body")
     failure_threshold: int = Field(default=1, ge=1, le=100, alias="failureThreshold", description="Alert after N consecutive failures")
+    tags: list[str] = Field(default_factory=list, max_length=10, description="Up to 10 labels for filtering/grouping")
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list[str]) -> list[str]:
+        cleaned = []
+        for tag in v:
+            tag = tag.strip().lower()
+            if not tag:
+                continue
+            if len(tag) > 30:
+                raise ValueError("tags must be at most 30 characters")
+            if not all(c.isalnum() or c in "-_." for c in tag):
+                raise ValueError("tags may only contain letters, digits, '-', '_' and '.'")
+            if tag not in cleaned:
+                cleaned.append(tag)
+        return cleaned
 
     @field_validator("name")
     @classmethod
@@ -107,10 +124,30 @@ class UpdateCheckRequest(BaseModel):
 
     # Escalation configuration
     escalation_minutes: Optional[int] = Field(None, ge=1, le=1440, alias="escalationMinutes", description="Minutes before escalating")
+    escalation_alert_channels: Optional[list[str]] = Field(None, alias="escalationAlertChannels", description="Alert channels for escalated alerts")
 
     # Suppression configuration
     suppress_after_count: Optional[int] = Field(None, ge=1, le=100, alias="suppressAfterCount", description="Suppress after N consecutive alerts")
     suppress_duration_minutes: Optional[int] = Field(None, ge=1, le=10080, alias="suppressDurationMinutes", description="Suppress for N minutes")
+    tags: Optional[list[str]] = Field(None, max_length=10, description="Up to 10 labels for filtering/grouping")
+
+    @field_validator("tags")
+    @classmethod
+    def validate_update_tags(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is None:
+            return None
+        cleaned = []
+        for tag in v:
+            tag = tag.strip().lower()
+            if not tag:
+                continue
+            if len(tag) > 30:
+                raise ValueError("tags must be at most 30 characters")
+            if not all(c.isalnum() or c in "-_." for c in tag):
+                raise ValueError("tags may only contain letters, digits, '-', '_' and '.'")
+            if tag not in cleaned:
+                cleaned.append(tag)
+        return cleaned
 
     @field_validator("name")
     @classmethod

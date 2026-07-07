@@ -238,6 +238,14 @@ class DynamoDBClient(DatabaseInterface):
                 item["url"] = check.url
             if check.expected_status_code != 200:
                 item["expectedStatusCode"] = check.expected_status_code
+            if check.slug:
+                item["slug"] = check.slug
+            if check.expected_string:
+                item["expectedString"] = check.expected_string
+            if check.failure_threshold and check.failure_threshold != 1:
+                item["failureThreshold"] = check.failure_threshold
+            if check.tags:
+                item["tags"] = check.tags
 
             # Add to token index
             item["GSI2PK"] = f"TOKEN#{check.token}"
@@ -859,10 +867,20 @@ class DynamoDBClient(DatabaseInterface):
             alert_channels=item.get("alertChannels", []),
             escalation_minutes=convert_to_int(item.get("escalationMinutes")) if item.get("escalationMinutes") else None,
             escalation_alert_channels=item.get("escalationAlertChannels", []),
+            escalation_triggered_at=item.get("escalationTriggeredAt"),
+            suppress_after_count=convert_to_int(item.get("suppressAfterCount")) if item.get("suppressAfterCount") else None,
+            suppress_duration_minutes=convert_to_int(item.get("suppressDurationMinutes")) if item.get("suppressDurationMinutes") else None,
+            consecutive_alert_count=convert_to_int(item.get("consecutiveAlertCount")) or 0,
+            suppressed_until=item.get("suppressedUntil"),
+            consecutive_failure_count=convert_to_int(item.get("consecutiveFailureCount")) or 0,
             type=item.get("type", "heartbeat"),
             schedule=item.get("schedule"),
             url=item.get("url"),
             expected_status_code=convert_to_int(item.get("expectedStatusCode")) or 200,
+            expected_string=item.get("expectedString"),
+            failure_threshold=convert_to_int(item.get("failureThreshold")) or 1,
+            slug=item.get("slug"),
+            tags=item.get("tags", []),
         )
 
     async def list_all_http_checks(self) -> List[Check]:

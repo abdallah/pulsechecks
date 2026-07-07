@@ -53,6 +53,7 @@ class CheckResponse(BaseModel):
     expected_status_code: int = Field(default=200, alias="expectedStatusCode")
     expected_string: Optional[str] = Field(None, alias="expectedString")
     failure_threshold: int = Field(default=1, alias="failureThreshold")
+    tags: List[str] = Field(default_factory=list)
 
 
 class CheckDetailResponse(CheckResponse):
@@ -65,6 +66,7 @@ class CheckDetailResponse(CheckResponse):
 
     # Escalation configuration
     escalation_minutes: Optional[int] = Field(None, alias="escalationMinutes")
+    escalation_alert_channels: List[str] = Field(default_factory=list, alias="escalationAlertChannels")
     escalation_triggered_at: Optional[str] = Field(None, alias="escalationTriggeredAt")
 
     # Suppression configuration

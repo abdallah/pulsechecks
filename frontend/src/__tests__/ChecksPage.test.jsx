@@ -192,7 +192,8 @@ describe('ChecksPage', () => {
         schedule: '',
         url: '',
         expectedStatusCode: 200,
-        failureThreshold: 1
+        failureThreshold: 1,
+        tags: []
       });
     });
   });
@@ -557,7 +558,8 @@ describe('ChecksPage', () => {
       expect(api.updateCheck).toHaveBeenCalledWith('team-123', 'check-1', {
         name: 'Updated Check Name',
         periodSeconds: 7200, // 2 hours * 3600 seconds
-        graceSeconds: 300 // 5 minutes unchanged
+        graceSeconds: 300, // 5 minutes unchanged
+        tags: []
       });
     });
   });

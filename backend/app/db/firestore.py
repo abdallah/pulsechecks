@@ -343,7 +343,9 @@ class FirestoreClient(DatabaseInterface):
             'schedule': check.schedule,
             'url': check.url,
             'expectedStatusCode': check.expected_status_code,
+            'expectedString': check.expected_string,
             'failureThreshold': check.failure_threshold,
+            'tags': check.tags or [],
         }
 
         # Remove None values (but keep slug and other important fields)
@@ -1060,5 +1062,10 @@ class FirestoreClient(DatabaseInterface):
             schedule=data.get('schedule'),
             url=data.get('url'),
             expected_status_code=int(data.get('expectedStatusCode', 200)),
+            expected_string=data.get('expectedString'),
             failure_threshold=int(data.get('failureThreshold', 1)),
+            suppress_after_count=int(data['suppressAfterCount']) if data.get('suppressAfterCount') else None,
+            suppress_duration_minutes=int(data['suppressDurationMinutes']) if data.get('suppressDurationMinutes') else None,
+            consecutive_failure_count=int(data.get('consecutiveFailureCount', 0)),
+            tags=data.get('tags', []),
         )

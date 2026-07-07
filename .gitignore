@@ -75,3 +75,10 @@ samconfig.toml
 
 # Firebase cache
 frontend/.firebase/*.cache
+# Local environments and logs (never commit)
+backend/deploy_venv/
+frontend/.firebase/
+*.log
+
+# Compiled provider binary (built by goreleaser in CI)
+terraform-provider/terraform-provider-pulsechecks

@@ -61,8 +61,8 @@ Send notifications to Telegram chats via bot API.
   "displayName": "Operations Telegram",
   "type": "telegram",
   "configuration": {
-    "botToken": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
-    "chatId": "-1001234567890"
+    "bot_token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz",
+    "chat_id": "-1001234567890"
   },
   "shared": false
 }
@@ -74,6 +74,32 @@ Send notifications to Telegram chats via bot API.
 3. Add bot to your group/channel
 4. Get chat ID (use @userinfobot or API)
 5. Create alert channel with bot token and chat ID
+
+### Email
+Send notifications by email over SMTP. Works on any cloud — configure the
+deployment with an SMTP provider (SES SMTP on AWS; SendGrid, Mailgun, or a
+Google Workspace relay on GCP).
+
+**Configuration:**
+```json
+{
+  "name": "oncall-email",
+  "displayName": "On-call Email",
+  "type": "email",
+  "configuration": {
+    "recipients": ["oncall@example.com", "sre-team@example.com"]
+  },
+  "shared": false
+}
+```
+
+Up to 20 recipients per channel.
+
+**Deployment prerequisites** (set once per deployment, via Terraform
+variables or environment variables): `SMTP_HOST`, `SMTP_PORT` (default 587),
+`SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`. If SMTP is not configured,
+email channels can be created but test notifications will fail with a clear
+error.
 
 ## Managing Alert Channels
 

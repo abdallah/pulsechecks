@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook, PlayCircle } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook, PlayCircle, Mail } from 'lucide-react'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
@@ -10,7 +10,8 @@ const ALL_CHANNEL_TYPES = {
   sns: { name: 'SNS Topic', icon: Bell, color: 'blue' },
   mattermost: { name: 'Mattermost', icon: MessageSquare, color: 'purple' },
   webhook: { name: 'Webhook', icon: Webhook, color: 'indigo' },
-  telegram: { name: 'Telegram', icon: Send, color: 'sky' }
+  telegram: { name: 'Telegram', icon: Send, color: 'sky' },
+  email: { name: 'Email', icon: Mail, color: 'amber' }
 }
 
 // Filter channel types based on cloud provider
@@ -155,6 +156,24 @@ export default function AlertChannelsPage({ user, onLogout }) {
             className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             required
           />
+        </div>
+      )
+    }
+
+    if (type === 'email') {
+      return (
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Recipients</label>
+          <input
+            type="text"
+            value={(newChannel.configuration.recipients || []).join(', ')}
+            onChange={(e) => handleConfigurationChange('recipients',
+              e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+            placeholder="oncall@example.com, sre-team@example.com"
+            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            required
+          />
+          <p className="mt-1 text-xs text-gray-500">Comma-separated, up to 20 addresses.</p>
         </div>
       )
     }

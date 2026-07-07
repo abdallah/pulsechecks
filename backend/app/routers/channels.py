@@ -336,6 +336,20 @@ async def _send_test_notification(channel: "AlertChannel", team_id: str) -> None
             if resp.status_code >= 400:
                 raise ValueError(f"Telegram returned HTTP {resp.status_code}")
 
+    elif channel.type == AlertChannelType.EMAIL:
+        recipients = channel.configuration.get("recipients") or []
+        if not recipients:
+            raise ValueError("Email recipients not configured")
+        from ..integrations.email import send_email
+        success = await send_email(
+            recipients,
+            "🔔 PulseChecks Test Notification",
+            f"Test notification — channel \"{channel.display_name}\" is working.\n"
+            f"Team: {team_id}\nSent at: {get_iso_timestamp()}\n",
+        )
+        if not success:
+            raise ValueError("SMTP delivery failed — check server logs and SMTP settings")
+
     else:
         raise ValueError(f"Unsupported channel type: {channel.type.value}")
 
@@ -371,6 +385,26 @@ def _validate_channel_configuration(channel_type: AlertChannelType, config: Dict
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Telegram channels require 'bot_token' and 'chat_id' in configuration"
             )
+    elif channel_type == AlertChannelType.EMAIL:
+        import re
+        recipients = config.get("recipients")
+        if not recipients or not isinstance(recipients, list):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email channels require 'recipients' (a list of email addresses) in configuration"
+            )
+        if len(recipients) > 20:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email channels support at most 20 recipients"
+            )
+        email_re = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+        for recipient in recipients:
+            if not isinstance(recipient, str) or not email_re.match(recipient):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid email address: {recipient!r}"
+                )
 
 
 def _get_sns_client():

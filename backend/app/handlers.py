@@ -185,7 +185,12 @@ async def _send_primary_alerts(check, team, sns_client, metrics):
 async def _send_channel_alert(channel, check, team, sns_client, metrics, alert_type="late"):
     """Send alert via a specific AlertChannel. Returns success boolean."""
     from .models import AlertChannelType
-    
+
+    # The recovery path passes metrics=None; fall back to the real client so
+    # metric calls don't raise after the alert has already been delivered.
+    if metrics is None:
+        metrics = get_metrics_client()
+
     try:
         if channel.type == AlertChannelType.SNS:
             topic_arn = channel.configuration.get('topic_arn')
@@ -257,10 +262,43 @@ async def _send_channel_alert(channel, check, team, sns_client, metrics, alert_t
             return success
             
         elif channel.type == AlertChannelType.TELEGRAM:
-            # TODO: Implement Telegram integration
-            logger.info(f"Telegram alerts not yet implemented for channel {channel.name}")
-            return False
-            
+            bot_token = channel.configuration.get('bot_token')
+            chat_id = channel.configuration.get('chat_id')
+            if not bot_token or not chat_id:
+                return False
+
+            settings = get_settings()
+            check_url = f"{settings.frontend_url}/teams/{check.team_id}/checks/{check.check_id}"
+            if alert_type == "recovery":
+                text = f"✅ Check recovered: {check.name} ({team.name})\n{check_url}"
+            else:
+                text = f"⚠️ Check late: {check.name} ({team.name})\n{check_url}"
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    json={"chat_id": chat_id, "text": text},
+                )
+                success = 200 <= response.status_code < 300
+
+            metrics.alert_sent(check.team_id, check.check_id, f'late_channel_{channel.type.value}', success)
+            return success
+
+        elif channel.type == AlertChannelType.EMAIL:
+            recipients = channel.configuration.get('recipients') or []
+            if not recipients:
+                return False
+
+            from .integrations.email import send_late_alert_email, send_recovery_alert_email
+            if alert_type == "recovery":
+                success = await send_recovery_alert_email(recipients, check, team.name)
+            else:
+                success = await send_late_alert_email(recipients, check, team.name)
+
+            metrics.alert_sent(check.team_id, check.check_id, f'late_channel_{channel.type.value}', success)
+            return success
+
+
     except Exception as e:
         logger.error(f"Failed to send alert via {channel.type.value} channel {channel.name}: {e}")
         metrics.alert_sent(check.team_id, check.check_id, f'late_channel_{channel.type.value}', False)

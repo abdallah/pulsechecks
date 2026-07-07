@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     ping_retention_days: int = 90
     frontend_url: str = "https://pulsechecks.example.com"
 
+    # SMTP (email alert channels — cloud-agnostic; use SES SMTP on AWS,
+    # any provider (SendGrid, Mailgun, Workspace relay) on GCP)
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""  # e.g. "PulseChecks <alerts@example.com>"
+    smtp_use_tls: bool = True
+
     # PostHog
     posthog_api_key: str = ""
     posthog_host: str = "https://us.i.posthog.com"

@@ -139,6 +139,11 @@ resource "aws_lambda_function" "api" {
       ALLOWED_EMAIL_DOMAINS = var.allowed_email_domains
       COGNITO_CLIENT_ID     = aws_cognito_user_pool_client.main.id
       COGNITO_USER_POOL_ID  = aws_cognito_user_pool.main.id
+      SMTP_HOST             = var.smtp_host
+      SMTP_PORT             = var.smtp_port
+      SMTP_USERNAME         = var.smtp_username
+      SMTP_PASSWORD         = var.smtp_password
+      SMTP_FROM             = var.smtp_from
     }
   }
 
@@ -165,6 +170,11 @@ resource "aws_lambda_function" "late_detector" {
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.pulsechecks.name
+      SMTP_HOST      = var.smtp_host
+      SMTP_PORT      = var.smtp_port
+      SMTP_USERNAME  = var.smtp_username
+      SMTP_PASSWORD  = var.smtp_password
+      SMTP_FROM      = var.smtp_from
     }
   }
 

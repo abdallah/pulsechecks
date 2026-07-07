@@ -114,7 +114,7 @@ describe('ChecksPage', () => {
       expect(screen.getByText('No checks')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Get started by creating a new check.')).toBeInTheDocument();
+    expect(screen.getByText(/A check watches one job/)).toBeInTheDocument();
   });
 
   test('opens create check form when button clicked', async () => {

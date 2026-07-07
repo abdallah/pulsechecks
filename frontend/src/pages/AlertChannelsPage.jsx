@@ -32,6 +32,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
   const navigate = useNavigate()
   const toast = useToast()
   const [channels, setChannels] = useState([])
+  const [team, setTeam] = useState(null)
   const [loading, setLoading] = useState(true)
   const [testingChannel, setTestingChannel] = useState(null)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
@@ -46,7 +47,15 @@ export default function AlertChannelsPage({ user, onLogout }) {
 
   useEffect(() => {
     loadChannels()
+    loadTeam()
   }, [teamId])
+
+  async function loadTeam() {
+    try {
+      setTeam(await api.getTeam(teamId))
+    } catch {
+    }
+  }
 
   async function loadChannels() {
     try {
@@ -221,7 +230,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
 
   if (loading) {
     return (
-      <Layout user={user} onLogout={onLogout}>
+      <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Teams', to: '/' }, { label: team?.name || 'Team', to: `/teams/${teamId}/checks` }, { label: 'Alert Channels' }]}>
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
         </div>
@@ -230,7 +239,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
   }
 
   return (
-    <Layout user={user} onLogout={onLogout}>
+    <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Teams', to: '/' }, { label: team?.name || 'Team', to: `/teams/${teamId}/checks` }, { label: 'Alert Channels' }]}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -344,8 +353,15 @@ export default function AlertChannelsPage({ user, onLogout }) {
             <Bell className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No alert channels</h3>
             <p className="mt-1 text-sm text-gray-500">
-              Get started by creating your first alert channel.
+              Without a channel, checks can't notify anyone when they fail.
             </p>
+            <button
+              onClick={() => setShowCreateChannel(true)}
+              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+              Create your first channel
+            </button>
           </div>
         ) : (
           <div className="bg-white shadow overflow-hidden sm:rounded-md">

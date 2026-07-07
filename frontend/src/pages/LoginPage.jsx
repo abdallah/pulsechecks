@@ -72,7 +72,7 @@ export default function LoginPage({ onLogin = () => {} }) {
           )}
           
           <div className="text-center text-xs text-gray-500">
-            <p>Secure authentication via {config.auth.type === 'firebase' ? 'Firebase Auth' : 'AWS Cognito'}</p>
+            <p>Secure authentication via Google Workspace SSO</p>
             <p className="mt-1">Domain-restricted access</p>
           </div>
         </div>

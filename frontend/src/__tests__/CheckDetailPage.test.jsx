@@ -171,11 +171,11 @@ describe('CheckDetailPage', () => {
     })
 
     // Check that check details are displayed
-    expect(screen.getByText('Test Check')).toBeInTheDocument()
+    expect(screen.getAllByText('Test Check').length).toBeGreaterThan(0)
     expect(screen.getByText('UP')).toBeInTheDocument()
 
     // Check that recent pings section is displayed
-    expect(screen.getByText('Recent Pings (Latest 20)')).toBeInTheDocument()
+    expect(screen.getByText('Recent Pings')).toBeInTheDocument()
 
     // Verify API calls were made correctly - only one call now
     expect(api.listPings).toHaveBeenCalledTimes(1)

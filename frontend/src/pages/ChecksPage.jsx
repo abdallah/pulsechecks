@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Plus, CheckCircle, AlertCircle, PauseCircle, ArrowLeft, Bell, MoreVertical, RotateCcw, Trash2, Settings, Play } from 'lucide-react'
+import { Plus, CheckCircle, AlertCircle, PauseCircle, ArrowLeft, Bell, MoreVertical, RotateCcw, Trash2, Settings, Play, Clock } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
@@ -276,11 +276,13 @@ export default function ChecksPage({ user, onLogout }) {
   function getStatusIcon(status) {
     switch (status) {
       case 'up':
-        return <CheckCircle className="h-5 w-5 text-green-500" />
+        return <CheckCircle className="h-5 w-5 text-green-500" aria-label="Status: up" role="img" />
       case 'late':
-        return <AlertCircle className="h-5 w-5 text-red-500" />
+        return <AlertCircle className="h-5 w-5 text-red-500" aria-label="Status: late" role="img" />
       case 'paused':
-        return <PauseCircle className="h-5 w-5 text-gray-400" />
+        return <PauseCircle className="h-5 w-5 text-gray-400" aria-label="Status: paused" role="img" />
+      case 'pending':
+        return <Clock className="h-5 w-5 text-amber-500" aria-label="Status: pending" role="img" />
       default:
         return null
     }
@@ -307,7 +309,7 @@ export default function ChecksPage({ user, onLogout }) {
   }
   
   return (
-    <Layout user={user} onLogout={onLogout}>
+    <Layout user={user} onLogout={onLogout} breadcrumbs={[{ label: 'Teams', to: '/' }, { label: team?.name || 'Team' }]}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -511,6 +513,7 @@ export default function ChecksPage({ user, onLogout }) {
                       min={60}
                       required
                       className="mt-1"
+                      presets={[{ label: '5m', seconds: 300 }, { label: '15m', seconds: 900 }, { label: '1h', seconds: 3600 }, { label: '6h', seconds: 21600 }, { label: '24h', seconds: 86400 }]}
                     />
                     <p className="mt-1 text-xs text-gray-500">{formData.type === 'heartbeat' ? 'How often to ping' : 'How often to check'}</p>
                   </div>
@@ -525,6 +528,7 @@ export default function ChecksPage({ user, onLogout }) {
                       min={0}
                       required
                       className="mt-1"
+                      presets={[{ label: '1m', seconds: 60 }, { label: '5m', seconds: 300 }, { label: '15m', seconds: 900 }, { label: '1h', seconds: 3600 }]}
                     />
                     <p className="mt-1 text-xs text-gray-500">Extra time before alert</p>
                   </div>
@@ -651,7 +655,14 @@ export default function ChecksPage({ user, onLogout }) {
           <div className="text-center py-12 bg-white shadow sm:rounded-lg">
             <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No checks</h3>
-            <p className="mt-1 text-sm text-gray-500">Get started by creating a new check.</p>
+            <p className="mt-1 text-sm text-gray-500">A check watches one job — your cron pings it, and you get alerted when it stops.</p>
+            <button
+              onClick={() => setShowCreateCheck(true)}
+              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+              Create your first check
+            </button>
             <div className="mt-4 mx-auto max-w-md bg-blue-50 border border-blue-200 rounded-md p-3 text-left text-sm text-blue-800">
               💡 Tip: Add a machine heartbeat check with a 5-min period to detect when your server goes down. Example:
               <code className="block mt-1 text-xs bg-white rounded px-2 py-1 break-all">*/5 * * * * curl -fsS https://pulsechecks.web.app/ping/&#123;token&#125;</code>
@@ -1023,6 +1034,7 @@ export default function ChecksPage({ user, onLogout }) {
                       min={60}
                       required
                       className="mt-1"
+                      presets={[{ label: '5m', seconds: 300 }, { label: '15m', seconds: 900 }, { label: '1h', seconds: 3600 }, { label: '6h', seconds: 21600 }, { label: '24h', seconds: 86400 }]}
                     />
                   </div>
                   
@@ -1038,6 +1050,7 @@ export default function ChecksPage({ user, onLogout }) {
                       min={0}
                       required
                       className="mt-1"
+                      presets={[{ label: '1m', seconds: 60 }, { label: '5m', seconds: 300 }, { label: '15m', seconds: 900 }, { label: '1h', seconds: 3600 }]}
                     />
                   </div>
                 </div>

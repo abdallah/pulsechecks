@@ -6,6 +6,7 @@ import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { config } from '../config'
 import { useToast } from '../components/Toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 import DurationInput from '../components/DurationInput'
 
 // Helper function to get the proper ping base URL (custom domain if available)
@@ -72,6 +73,7 @@ export default function CheckDetailPage({ user, onLogout }) {
   const [copied, setCopied] = useState(false)
   const [selectedPing, setSelectedPing] = useState(null)
   const [showTokenRotated, setShowTokenRotated] = useState(false)
+  const [confirmState, setConfirmState] = useState(null)
   const [availableTopics, setAvailableTopics] = useState([])
   const [availableChannels, setAvailableChannels] = useState([])
   const [teamSlug, setTeamSlug] = useState(null)
@@ -299,22 +301,7 @@ export default function CheckDetailPage({ user, onLogout }) {
       // Update with server response to ensure consistency
       setCheck(updatedCheck)
     } catch (error) {
-      alert('Failed to update alert channels: ' + error.message)
-      // Revert on error
-      loadCheckData()
-    }
-  }
-
-  async function updateCheckAlertTopics(selectedTopicArns) {
-    // Optimistic update
-    setCheck(prev => ({ ...prev, alertChannels: selectedTopicArns }))
-
-    try {
-      const updatedCheck = await api.updateCheck(teamId, checkId, { alertChannels: selectedTopicArns })
-      // Update with server response to ensure consistency
-      setCheck(updatedCheck)
-    } catch (error) {
-      alert('Failed to update alert topics: ' + error.message)
+      toast.error('Failed to update alert channels: ' + error.message)
       // Revert on error
       loadCheckData()
     }
@@ -325,7 +312,7 @@ export default function CheckDetailPage({ user, onLogout }) {
       await api.pauseCheck(teamId, checkId)
       loadCheckData()
     } catch (error) {
-      alert('Failed to pause check: ' + error.message)
+      toast.error('Failed to pause check: ' + error.message)
     }
   }
 
@@ -334,39 +321,46 @@ export default function CheckDetailPage({ user, onLogout }) {
       await api.resumeCheck(teamId, checkId)
       loadCheckData()
     } catch (error) {
-      alert('Failed to resume check: ' + error.message)
+      toast.error('Failed to resume check: ' + error.message)
     }
   }
 
-  async function handleRotateToken() {
-    if (!confirm('Are you sure you want to rotate the token? The old ping URL will stop working immediately.')) {
-      return
-    }
-
-    try {
-      const updatedCheck = await api.rotateCheckToken(teamId, checkId)
-      // Update check with new token and ping URL
-      updatedCheck.pingUrl = `${getPingBaseUrl()}/ping/${updatedCheck.token}`
-      setCheck(updatedCheck)
-      setShowTokenRotated(true)
-      toast.success('Token rotated successfully')
-    } catch (error) {
-      toast.error('Failed to rotate token: ' + error.message)
-    }
+  function handleRotateToken() {
+    setConfirmState({
+      title: 'Rotate Token',
+      message: 'Are you sure you want to rotate the token? The old ping URL will stop working immediately.',
+      confirmLabel: 'Rotate Token',
+      onConfirm: async () => {
+        try {
+          const updatedCheck = await api.rotateCheckToken(teamId, checkId)
+          // Update check with new token and ping URL
+          updatedCheck.pingUrl = `${getPingBaseUrl()}/ping/${updatedCheck.token}`
+          setCheck(updatedCheck)
+          setShowTokenRotated(true)
+          toast.success('Token rotated successfully')
+        } catch (error) {
+          toast.error('Failed to rotate token: ' + error.message)
+        }
+      },
+    })
   }
 
-  async function handleDeleteCheck() {
-    if (!confirm(`Are you sure you want to delete "${check.name}"? This action cannot be undone and will delete all ping history.`)) {
-      return
-    }
-
-    try {
-      await api.deleteCheck(teamId, checkId)
-      alert('Check deleted successfully')
-      navigate(`/teams/${teamId}/checks`)
-    } catch (error) {
-      alert('Failed to delete check: ' + error.message)
-    }
+  function handleDeleteCheck() {
+    setConfirmState({
+      title: 'Delete Check',
+      message: `Are you sure you want to delete "${check.name}"? This action cannot be undone and will delete all ping history.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.deleteCheck(teamId, checkId)
+          toast.success('Check deleted successfully')
+          navigate(`/teams/${teamId}/checks`)
+        } catch (error) {
+          toast.error('Failed to delete check: ' + error.message)
+        }
+      },
+    })
   }
 
   function openEditHttpCheck() {
@@ -1113,6 +1107,15 @@ export default function CheckDetailPage({ user, onLogout }) {
               <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
                 <Bell className="h-5 w-5 mr-2" />
                 Alert Configuration
+                {(check.alertChannels || []).length > 0 ? (
+                  <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {check.alertChannels.length} {check.alertChannels.length === 1 ? 'channel' : 'channels'} active
+                  </span>
+                ) : (
+                  <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                    ⚠ No channels — alerts disabled
+                  </span>
+                )}
               </h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-500">
                 Configure notifications, escalation, and suppression for this check
@@ -1455,6 +1458,7 @@ curl ${check.pingUrl}/start`}
           </div>
         </div>
       )}
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </Layout>
   )
 }

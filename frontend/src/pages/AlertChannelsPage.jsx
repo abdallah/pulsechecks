@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Trash2, Settings, Bell, MessageSquare, Send, Webhook, 
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { config } from '../config'
 
 const ALL_CHANNEL_TYPES = {
@@ -34,6 +35,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [testingChannel, setTestingChannel] = useState(null)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
+  const [confirmState, setConfirmState] = useState(null)
   const [newChannel, setNewChannel] = useState({
     name: '',
     displayName: '',
@@ -76,15 +78,22 @@ export default function AlertChannelsPage({ user, onLogout }) {
     }
   }
 
-  async function handleDeleteChannel(channelId) {
-    if (!confirm('Are you sure you want to delete this alert channel?')) return
-
-    try {
-      await api.deleteAlertChannel(teamId, channelId)
-      loadChannels()
-    } catch (error) {
-      toast.error('Failed to delete channel: ' + error.message)
-    }
+  function handleDeleteChannel(channelId) {
+    setConfirmState({
+      title: 'Delete Alert Channel',
+      message: 'Are you sure you want to delete this alert channel? Checks using it will stop sending notifications through it.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.deleteAlertChannel(teamId, channelId)
+          toast.success('Alert channel deleted')
+          loadChannels()
+        } catch (error) {
+          toast.error('Failed to delete channel: ' + error.message)
+        }
+      },
+    })
   }
 
   async function handleTestChannel(channelId) {
@@ -396,6 +405,7 @@ export default function AlertChannelsPage({ user, onLogout }) {
           </div>
         )}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </Layout>
   )
 }

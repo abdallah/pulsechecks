@@ -4,6 +4,7 @@ import { ArrowLeft, Bell, Users, MessageSquare, Send, Plus, Settings, Trash2, We
 import Layout from '../components/Layout'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { config } from '../config'
 
 const ALL_CHANNEL_TYPES = [
@@ -26,6 +27,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [showAddChannel, setShowAddChannel] = useState(false)
   const [editingChannel, setEditingChannel] = useState(null)
+  const [confirmState, setConfirmState] = useState(null)
   const [newChannel, setNewChannel] = useState({
     name: '',
     displayName: '',
@@ -97,16 +99,22 @@ export default function SharedAlertsPage({ user, onLogout }) {
     }
   }
 
-  async function handleDeleteChannel(channel) {
-    if (!confirm(`Are you sure you want to delete "${channel.displayName}"?`)) return
-
-    try {
-      await api.deleteAlertChannel(channel.teamId, channel.channelId)
-      toast.success('Channel deleted successfully')
-      loadSharedChannels()
-    } catch (error) {
-      toast.error('Failed to delete channel: ' + error.message)
-    }
+  function handleDeleteChannel(channel) {
+    setConfirmState({
+      title: 'Delete Shared Channel',
+      message: `Are you sure you want to delete "${channel.displayName}"? Checks in all teams using it will stop sending notifications through it.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await api.deleteAlertChannel(channel.teamId, channel.channelId)
+          toast.success('Channel deleted successfully')
+          loadSharedChannels()
+        } catch (error) {
+          toast.error('Failed to delete channel: ' + error.message)
+        }
+      },
+    })
   }
 
   async function handleUpdateChannel(e) {
@@ -491,6 +499,7 @@ export default function SharedAlertsPage({ user, onLogout }) {
           </div>
         )}
       </div>
+      <ConfirmDialog state={confirmState} onClose={() => setConfirmState(null)} />
     </Layout>
   )
 }

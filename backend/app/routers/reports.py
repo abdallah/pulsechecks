@@ -188,6 +188,16 @@ def _report_rows(report_type: str, payload: dict) -> list[dict]:
     return rows
 
 
+def _csv_safe(value):
+    """Neutralize CSV formula injection (OWASP): a cell whose text begins with
+    =, +, -, @, or a control char is executed as a formula by Excel/Sheets.
+    User-controlled fields (e.g. check names) flow into these cells, so prefix
+    any such value with a single quote to force it to render as text."""
+    if isinstance(value, str) and value and value[0] in ("=", "+", "-", "@", "\t", "\r", "\n"):
+        return "'" + value
+    return value
+
+
 def _render_report_content(report_type: str, fmt: str, payload: dict) -> tuple[str, str]:
     if fmt == "json":
         return json.dumps(payload, indent=2), "application/json"
@@ -198,9 +208,9 @@ def _render_report_content(report_type: str, fmt: str, payload: dict) -> tuple[s
     writer = csv.DictWriter(stream, fieldnames=fieldnames)
     writer.writeheader()
     if rows:
-        writer.writerows(rows)
+        writer.writerows({k: _csv_safe(v) for k, v in row.items()} for row in rows)
     else:
-        writer.writerow({"team_id": payload["teamId"], "report_type": payload["reportType"], "from": payload["from"], "to": payload["to"]})
+        writer.writerow({"team_id": _csv_safe(payload["teamId"]), "report_type": payload["reportType"], "from": payload["from"], "to": payload["to"]})
     return stream.getvalue(), "text/csv"
 
 

@@ -12,6 +12,9 @@ from ..models import (
     Permission,
 )
 from ..config import get_settings
+from ..logging_config import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/teams/{team_id}/alerts", tags=["alerts"])
 
@@ -130,19 +133,19 @@ async def list_alert_topics(
                         ))
                     except ClientError as e:
                         # Skip topics we can't access
-                        print(f"Warning: Could not access topic {topic_arn}: {e}")
+                        logger.warning("Could not access topic %s: %s", topic_arn, e)
                         continue
 
         return topics
 
     except ClientError as e:
-        print(f"Error listing SNS topics: {e}")
+        logger.error("Error listing SNS topics: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list alert topics: {str(e)}"
         )
     except Exception as e:
-        print(f"Unexpected error listing alert topics: {e}")
+        logger.error("Unexpected error listing alert topics: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list alert topics"

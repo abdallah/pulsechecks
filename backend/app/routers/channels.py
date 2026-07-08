@@ -12,6 +12,9 @@ from ..config import get_settings
 from ..ssrf_utils import validate_webhook_url_strict, SSRFValidationError
 from ..posthog_client import get_posthog_client, new_context, identify_context
 from ..audit import record_audit
+from ..logging_config import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/teams/{team_id}/channels", tags=["alert-channels"])
 
@@ -225,7 +228,7 @@ async def delete_alert_channel(
             sns.delete_topic(TopicArn=topic_arn)
         except ClientError as e:
             # Log but don't fail if topic deletion fails
-            print(f"Warning: Failed to delete SNS topic {topic_arn}: {e}")
+            logger.warning("Failed to delete SNS topic %s: %s", topic_arn, e)
     
     await db.delete_alert_channel(team_id, channel_id)
     await record_audit(db, team_id, current_user, "channel.deleted", "channel", channel_id, channel.display_name, detail=f"type: {channel.type.value}")

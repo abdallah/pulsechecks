@@ -41,6 +41,37 @@ resource "google_compute_security_policy" "api_edge" {
 
   name = "pulsechecks-api-edge-policy-${var.environment}"
 
+  # All rate rules key on client IP (enforce_on_key = "IP").
+  # Without it Cloud Armor defaults to "ALL" — one shared bucket for every
+  # client — so a single flooder would exhaust the budget and legitimate
+  # ping traffic would be the collateral damage. Per-IP keying is what
+  # makes the limiter protect availability instead of threatening it.
+
+  # Stricter per-IP limit for the management API (everything except /ping/
+  # and /health). Dashboards don't need hundreds of requests per minute.
+  rule {
+    priority = 900
+    action   = "throttle"
+
+    match {
+      expr {
+        expression = "!request.path.startsWith('/ping/') && request.path != '/health'"
+      }
+    }
+
+    rate_limit_options {
+      conform_action = "allow"
+      exceed_action  = "deny(429)"
+      enforce_on_key = "IP"
+
+      rate_limit_threshold {
+        count        = var.edge_throttle_api_requests_per_minute
+        interval_sec = 60
+      }
+    }
+  }
+
+  # Per-IP short-window throttle (protects against bursts)
   rule {
     priority = 1000
     action   = "throttle"
@@ -55,6 +86,7 @@ resource "google_compute_security_policy" "api_edge" {
     rate_limit_options {
       conform_action = "allow"
       exceed_action  = "deny(429)"
+      enforce_on_key = "IP"
 
       rate_limit_threshold {
         count        = var.edge_throttle_requests_per_second
@@ -63,9 +95,11 @@ resource "google_compute_security_policy" "api_edge" {
     }
   }
 
+  # Per-IP sustained-rate ban: clients far above the budget for a full
+  # minute get banned outright for a cool-down instead of retrying 429s.
   rule {
     priority = 1010
-    action   = "throttle"
+    action   = "rate_based_ban"
 
     match {
       versioned_expr = "SRC_IPS_V1"
@@ -75,8 +109,10 @@ resource "google_compute_security_policy" "api_edge" {
     }
 
     rate_limit_options {
-      conform_action = "allow"
-      exceed_action  = "deny(429)"
+      conform_action   = "allow"
+      exceed_action    = "deny(429)"
+      enforce_on_key   = "IP"
+      ban_duration_sec = var.edge_throttle_ban_duration_seconds
 
       rate_limit_threshold {
         count        = var.edge_throttle_burst

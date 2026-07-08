@@ -79,11 +79,32 @@ logger.warning(
     "use API Gateway throttling or a shared store for global enforcement."
 )
 
+def get_client_ip(request: Request) -> str:
+    """Resolve the real client IP for rate-limit keying.
+
+    Behind Cloud Run / the global LB, request.client.host is the proxy's
+    address — keying on it would put every user in one shared bucket
+    (either throttling everyone together or nobody meaningfully). When
+    TRUSTED_PROXY_HOPS is set, take the client IP from X-Forwarded-For,
+    counting only the trailing entries appended by our own trusted
+    infrastructure; anything earlier is attacker-controlled.
+    """
+    from .config import get_settings
+    hops = get_settings().trusted_proxy_hops
+    if hops > 0:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            entries = [entry.strip() for entry in forwarded.split(",") if entry.strip()]
+            if len(entries) >= hops:
+                return entries[-hops]
+    return request.client.host if request.client else "unknown"
+
+
 async def rate_limit_middleware(request: Request, call_next):
     """Rate limiting middleware."""
     # Get client IP
-    client_ip = request.client.host if request.client else "unknown"
-    
+    client_ip = get_client_ip(request)
+
     # Choose appropriate limiter
     if request.url.path.startswith("/ping/"):
         limiter = ping_limiter

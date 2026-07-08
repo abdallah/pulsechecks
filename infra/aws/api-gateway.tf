@@ -35,9 +35,32 @@ resource "aws_apigatewayv2_stage" "main" {
     })
   }
 
+  # Shared token bucket for the management API. HTTP APIs can't do
+  # per-client throttling natively (that needs CloudFront+WAF in front);
+  # what we CAN do is isolate budgets so one traffic class can't starve
+  # another — see the per-route settings below.
   default_route_settings {
     throttling_rate_limit  = var.api_gateway_throttling_rate_limit
     throttling_burst_limit = var.api_gateway_throttling_burst_limit
+  }
+
+  # Ping ingestion gets its own, larger throttle budget on every ping
+  # route. A flood against the dashboard API exhausts only the default
+  # bucket — ping ingestion keeps its full allowance, and vice versa.
+  dynamic "route_settings" {
+    for_each = toset([
+      "GET /ping/{token}",
+      "POST /ping/{token}",
+      "GET /ping/{token}/fail",
+      "POST /ping/{token}/fail",
+      "GET /ping/{token}/start",
+      "POST /ping/{token}/start",
+    ])
+    content {
+      route_key              = route_settings.value
+      throttling_rate_limit  = var.ping_throttling_rate_limit
+      throttling_burst_limit = var.ping_throttling_burst_limit
+    }
   }
 
   tags = {

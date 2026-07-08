@@ -51,6 +51,65 @@ curl -X POST https://api.pulsechecks.example.com/ping/test-token \
   -d "Health check test"
 ```
 
+## Rate Limiting Architecture
+
+Rate limiting is enforced **at the cloud edge, per client IP** — never as a
+single shared bucket, and never only inside the app. The in-app limiter is
+defense-in-depth, not the primary control (a per-instance limiter cannot see
+global traffic in a serverless deployment).
+
+### GCP (primary): Cloud Armor on the global HTTPS LB
+
+With `edge_throttling_enabled = true` (default), all public traffic flows
+through the global external HTTPS load balancer, where Cloud Armor enforces:
+
+| Rule | Scope | Limit | Action |
+|---|---|---|---|
+| 900 | Management API (`!/ping/*`, `!/health`) | `edge_throttle_api_requests_per_minute`/min **per IP** | 429 |
+| 1000 | All paths | `edge_throttle_requests_per_second`/s **per IP** | 429 |
+| 1010 | All paths | `edge_throttle_burst`/min **per IP** | ban for `edge_throttle_ban_duration_seconds` |
+
+Design invariants:
+- **`enforce_on_key = "IP"` on every rule.** A keyless (global-bucket)
+  throttle is worse than none: one flooder exhausts the shared budget and
+  legitimate ping traffic becomes the collateral damage.
+- **Cloud Run ingress is locked to `internal-and-cloud-load-balancing`**,
+  so the `run.app` URL cannot be used to bypass Cloud Armor. Cloud
+  Scheduler's OIDC calls still arrive (Google-internal network).
+- **Availability**: enforcement happens on Google's edge (LB SLA 99.99%),
+  costs the backend nothing, and per-IP keying means an attack degrades
+  only the attacker — this is what lets the limiter *protect* the 99.99%
+  ingestion target instead of threatening it.
+
+### AWS: API Gateway throttling with isolated budgets
+
+HTTP APIs cannot do per-client throttling natively, so the design isolates
+token buckets per traffic class:
+
+- **Ping routes** get a dedicated budget (`ping_throttling_rate_limit`/
+  `ping_throttling_burst_limit`) — a flood against the dashboard API can
+  never starve ping ingestion, and vice versa.
+- **Everything else** shares the stage default
+  (`api_gateway_throttling_rate_limit`/`_burst_limit`).
+- Throttling is enforced by API Gateway before Lambda is invoked, so
+  floods cost no compute and cannot exhaust Lambda concurrency.
+- **If AWS becomes a primary target**: put CloudFront + WAF (rate-based
+  rules are per-IP) in front of the API for parity with Cloud Armor.
+
+### In-app limiter (defense-in-depth)
+
+The process-local limiter in `middleware.py` remains as a backstop. Its
+per-instance nature is remedied two ways:
+1. The **authoritative** limits live at the edge (above) where global
+   traffic is visible.
+2. Its keying is now correct behind proxies: `TRUSTED_PROXY_HOPS` tells it
+   how many trailing `X-Forwarded-For` entries were appended by trusted
+   infrastructure (2 behind the global LB, 1 for direct Cloud Run, 0 on
+   Lambda where API Gateway supplies the real source IP). Entries earlier
+   in the header are client-supplied and ignored, so spoofing can only
+   diversify an attacker's keys at the in-app layer — the edge layer keys
+   on the true connection IP regardless.
+
 ## Alert Delivery Pipeline
 
 Every alert (late / recovery / escalation) is written as a durable

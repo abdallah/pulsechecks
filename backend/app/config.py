@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     debug: bool = False
     ping_retention_days: int = 90
 
+    # How many trailing X-Forwarded-For entries were appended by
+    # infrastructure we trust. 0 = ignore XFF (use the socket peer, correct
+    # on Lambda where API Gateway supplies the real source IP); 1 = Cloud Run
+    # reached directly (Cloud Run appends the caller's IP); 2 = Cloud Run
+    # behind the global HTTPS LB (GFE appends client-ip, lb-ip). Anything
+    # earlier in the header is client-supplied and must not be trusted.
+    trusted_proxy_hops: int = 0
+
     # Dead-man's-switch: external heartbeat URL pinged after every
     # successful late-detection run. Point this at an independent
     # monitor (e.g. a healthchecks.io check) so you find out when

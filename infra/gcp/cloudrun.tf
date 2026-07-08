@@ -4,6 +4,17 @@ resource "google_cloud_run_service" "pulsechecks_api" {
   location = var.gcp_region
   project  = var.gcp_project_id
 
+  # When edge throttling is on, public traffic MUST come through the
+  # global LB (where Cloud Armor enforces per-IP limits). Without this,
+  # the run.app URL is a direct bypass around the rate limiter.
+  # "internal-and-cloud-load-balancing" still admits Cloud Scheduler's
+  # OIDC calls (they arrive over Google's internal network).
+  metadata {
+    annotations = {
+      "run.googleapis.com/ingress" = var.edge_throttling_enabled ? "internal-and-cloud-load-balancing" : "all"
+    }
+  }
+
   template {
     spec {
       service_account_name = google_service_account.cloudrun_sa.email
@@ -71,6 +82,14 @@ resource "google_cloud_run_service" "pulsechecks_api" {
         env {
           name  = "HEARTBEAT_URL"
           value = var.heartbeat_url
+        }
+
+        # In-app rate limiter keying: how many trailing X-Forwarded-For
+        # entries our infrastructure appends (2 behind the global LB,
+        # 1 when Cloud Run is reached directly)
+        env {
+          name  = "TRUSTED_PROXY_HOPS"
+          value = var.edge_throttling_enabled ? "2" : "1"
         }
 
         # SMTP for email alert channels (optional — email channels are

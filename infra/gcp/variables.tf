@@ -151,3 +151,15 @@ variable "heartbeat_url" {
   type        = string
   default     = ""
 }
+
+variable "edge_throttle_api_requests_per_minute" {
+  description = "Per-IP Cloud Armor limit for management API paths (everything except /ping/ and /health)"
+  type        = number
+  default     = 300
+}
+
+variable "edge_throttle_ban_duration_seconds" {
+  description = "How long Cloud Armor bans an IP that sustains traffic above the burst threshold"
+  type        = number
+  default     = 600
+}

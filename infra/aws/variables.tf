@@ -105,3 +105,15 @@ variable "heartbeat_url" {
   type        = string
   default     = ""
 }
+
+variable "ping_throttling_rate_limit" {
+  description = "Dedicated steady-state throttle (req/s) for ping ingestion routes, isolated from the management API budget"
+  type        = number
+  default     = 500
+}
+
+variable "ping_throttling_burst_limit" {
+  description = "Dedicated burst throttle for ping ingestion routes"
+  type        = number
+  default     = 1000
+}

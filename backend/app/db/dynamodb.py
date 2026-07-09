@@ -146,6 +146,28 @@ class DynamoDBClient(DatabaseInterface):
             )
             return response.get("Items", [])
 
+    async def list_all_teams(self) -> List[Team]:
+        """List every team (definition export / standby sync)."""
+        async with self._get_table() as table:
+            response = await table.scan(
+                FilterExpression="SK = :sk",
+                ExpressionAttributeValues={":sk": "METADATA"},
+            )
+            teams = []
+            for item in response.get("Items", []):
+                if "teamId" not in item:
+                    continue
+                teams.append(Team(
+                    team_id=item["teamId"],
+                    name=item["name"],
+                    slug=item.get("slug"),
+                    created_at=item["createdAt"],
+                    created_by=item["createdBy"],
+                    mattermost_webhook_url=item.get("mattermostWebhookUrl"),
+                    mattermost_webhooks=item.get("mattermostWebhooks", []),
+                ))
+            return teams
+
     # Membership operations
     async def add_team_member(self, member: TeamMember) -> None:
         """Add a member to a team."""
@@ -246,6 +268,8 @@ class DynamoDBClient(DatabaseInterface):
                 item["failureThreshold"] = check.failure_threshold
             if check.tags:
                 item["tags"] = check.tags
+            if check.managed_by_sync:
+                item["managedBySync"] = True
 
             # Add to token index
             item["GSI2PK"] = f"TOKEN#{check.token}"
@@ -932,6 +956,7 @@ class DynamoDBClient(DatabaseInterface):
             failure_threshold=convert_to_int(item.get("failureThreshold")) or 1,
             slug=item.get("slug"),
             tags=item.get("tags", []),
+            managed_by_sync=bool(item.get("managedBySync", False)),
         )
 
     async def query_due_http_checks(self, current_time_seconds: int, limit: int = 500) -> List[Check]:

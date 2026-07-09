@@ -163,3 +163,10 @@ variable "edge_throttle_ban_duration_seconds" {
   type        = number
   default     = 600
 }
+
+variable "sync_token" {
+  description = "Shared secret authenticating the cross-cloud definitions export (credential-grade: the payload includes check tokens)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

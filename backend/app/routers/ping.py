@@ -163,7 +163,9 @@ async def _record_ping_internal(
         # Enqueue-only (attempt_now=False): the ping request must never
         # block on outbound notification calls. The late-detection
         # scheduler drains the queue within ~2 minutes.
-        if was_late and ping_type == PingType.SUCCESS and check.alert_channels:
+        settings = get_settings()
+        shadow = settings.standby_mode and getattr(check, "managed_by_sync", False)
+        if was_late and ping_type == PingType.SUCCESS and check.alert_channels and not shadow:
             try:
                 from ..alert_dispatch import enqueue_check_alerts
                 await enqueue_check_alerts(check=check, db=db, alert_type="recovery", attempt_now=False)

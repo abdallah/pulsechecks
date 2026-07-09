@@ -117,3 +117,54 @@ variable "ping_throttling_burst_limit" {
   type        = number
   default     = 1000
 }
+
+# ─── Warm standby / cross-cloud failover ────────────────────────────────────
+
+variable "auth_provider" {
+  description = "Auth provider override ('firebase' to share identity space with the GCP primary; empty = Cognito)"
+  type        = string
+  default     = ""
+}
+
+variable "firebase_project_id" {
+  description = "Firebase project ID (required when auth_provider = 'firebase')"
+  type        = string
+  default     = ""
+}
+
+variable "standby_mode" {
+  description = "Run this deployment as a warm standby: mirror definitions from the primary, detect but do not alert for synced checks"
+  type        = bool
+  default     = false
+}
+
+variable "sync_token" {
+  description = "Shared secret authenticating the cross-cloud definitions sync (credential-grade: the payload includes check tokens)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "primary_export_url" {
+  description = "The primary's export endpoint, e.g. https://api.example.com/internal/export-definitions"
+  type        = string
+  default     = ""
+}
+
+variable "enable_cross_cloud_failover" {
+  description = "Create Route53 health-checked failover records for api.<domain> (GCP primary -> this cloud's API Gateway)"
+  type        = bool
+  default     = false
+}
+
+variable "primary_api_fqdn" {
+  description = "FQDN Route53 health-checks on the GCP primary (usually api.<domain>... use the LB hostname to avoid checking through the failover record itself)"
+  type        = string
+  default     = ""
+}
+
+variable "gcp_primary_api_ip" {
+  description = "Static global IP of the GCP edge load balancer (terraform output from infra/gcp)"
+  type        = string
+  default     = ""
+}

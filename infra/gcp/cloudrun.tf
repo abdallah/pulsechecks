@@ -84,6 +84,13 @@ resource "google_cloud_run_service" "pulsechecks_api" {
           value = var.heartbeat_url
         }
 
+        # Cross-cloud definitions export for the AWS warm standby
+        # (endpoint stays 403 until this is set)
+        env {
+          name  = "SYNC_TOKEN"
+          value = var.sync_token
+        }
+
         # In-app rate limiter keying: how many trailing X-Forwarded-For
         # entries our infrastructure appends (2 behind the global LB,
         # 1 when Cloud Run is reached directly)

@@ -144,6 +144,11 @@ resource "aws_lambda_function" "api" {
       SMTP_USERNAME         = var.smtp_username
       SMTP_PASSWORD         = var.smtp_password
       SMTP_FROM             = var.smtp_from
+      AUTH_PROVIDER         = var.auth_provider
+      FIREBASE_PROJECT_ID   = var.firebase_project_id
+      STANDBY_MODE          = var.standby_mode ? "true" : "false"
+      SYNC_TOKEN            = var.sync_token
+      PRIMARY_EXPORT_URL    = var.primary_export_url
     }
   }
 
@@ -171,11 +176,45 @@ resource "aws_lambda_function" "late_detector" {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.pulsechecks.name
       HEARTBEAT_URL  = var.heartbeat_url
+      STANDBY_MODE   = var.standby_mode ? "true" : "false"
       SMTP_HOST      = var.smtp_host
       SMTP_PORT      = var.smtp_port
       SMTP_USERNAME  = var.smtp_username
       SMTP_PASSWORD  = var.smtp_password
       SMTP_FROM      = var.smtp_from
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash
+    ]
+  }
+}
+
+
+# Standby definition-sync Lambda: pulls teams/checks/channels from the
+# primary cloud every few minutes so this deployment can take over
+# ingestion + alerting on promotion. Only created in standby mode.
+resource "aws_lambda_function" "standby_sync" {
+  count = var.standby_mode ? 1 : 0
+
+  function_name = "${var.project_name}-standby-sync-${var.environment}"
+  role          = aws_iam_role.lambda_exec.arn
+  handler       = "app.standby_sync.standby_sync_handler"
+  runtime       = "python3.13"
+  timeout       = 120
+  memory_size   = 512
+
+  filename         = data.archive_file.lambda_placeholder.output_path
+  source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE     = aws_dynamodb_table.pulsechecks.name
+      SYNC_TOKEN         = var.sync_token
+      PRIMARY_EXPORT_URL = var.primary_export_url
     }
   }
 

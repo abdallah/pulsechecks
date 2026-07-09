@@ -121,3 +121,51 @@ async def http_poll(request: Request):
     await _verify_oidc(request)
     await poll_http_checks()
     return {"ok": True}
+
+
+def _verify_sync_token(request: Request) -> None:
+    """Authenticate the cross-cloud sync pull via the shared SYNC_TOKEN.
+
+    Fails closed: if no token is configured on this deployment, the export
+    endpoint does not exist as far as callers are concerned (404-shaped 403).
+    The payload includes check ping tokens and channel configurations, so
+    this must be treated as a credential-grade gate.
+    """
+    from ..config import get_settings
+    from ..utils.token_security import timing_safe_compare
+
+    configured = get_settings().sync_token
+    provided = request.headers.get("X-Sync-Token", "")
+    if not configured or not provided or not timing_safe_compare(provided, configured):
+        logger.warning("Rejected definitions export: missing or invalid sync token")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+
+@router.get("/export-definitions")
+async def export_definitions(request: Request):
+    """Definitions export for the warm standby (teams, members, checks, channels).
+
+    Pulled by the other cloud's sync job. Protected by SYNC_TOKEN.
+    """
+    _verify_sync_token(request)
+
+    from ..standby_sync import build_definitions_export
+    db = create_db_client()
+    payload = await build_definitions_export(db)
+    logger.info("Definitions export served (%d teams)", len(payload.get("teams", [])))
+    return payload
+
+
+@router.post("/standby-sync")
+async def run_standby_sync(request: Request):
+    """Trigger a sync pull on the standby (scheduler-invoked, OIDC on GCP,
+    or SYNC_TOKEN for cross-cloud/manual invocation)."""
+    if request.headers.get("X-Sync-Token"):
+        _verify_sync_token(request)
+    else:
+        await _verify_oidc(request)
+
+    from ..standby_sync import pull_definitions_from_primary
+    db = create_db_client()
+    counts = await pull_definitions_from_primary(db)
+    return {"ok": True, "synced": counts}

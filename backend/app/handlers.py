@@ -38,7 +38,15 @@ async def _late_detector_impl(event: Dict[str, Any], context: Any) -> Dict[str, 
     escalations_triggered = 0
     alerts_suppressed = 0
 
+    standby = settings.standby_mode
+
     for check in due_checks:
+        # Warm-standby shadow mode: mirror state transitions but never
+        # deliver alerts for checks synced from the primary — the primary
+        # is alerting for them. Native checks (sentinel watchers of the
+        # other cloud) alert normally. Promotion flips STANDBY_MODE off.
+        shadow = standby and getattr(check, "managed_by_sync", False)
+
         # Check if alerts are currently suppressed
         if _is_suppressed(check, current_time):
             alerts_suppressed += 1
@@ -66,12 +74,13 @@ async def _late_detector_impl(event: Dict[str, Any], context: Any) -> Dict[str, 
 
             # Enqueue durable deliveries and attempt them immediately;
             # failures stay pending and are retried with backoff below.
-            deliveries = await enqueue_check_alerts(db, check, "late", team=team)
-            alerts_queued += len(deliveries)
-            alerts_delivered += sum(1 for d in deliveries if d.status == "delivered")
+            if not shadow:
+                deliveries = await enqueue_check_alerts(db, check, "late", team=team)
+                alerts_queued += len(deliveries)
+                alerts_delivered += sum(1 for d in deliveries if d.status == "delivered")
 
         # Check for escalation (even if check was already late)
-        if _should_escalate(check, current_time):
+        if not shadow and _should_escalate(check, current_time):
             # Trigger escalation
             await db.mark_escalation_triggered(check.team_id, check.check_id, get_iso_timestamp())
 

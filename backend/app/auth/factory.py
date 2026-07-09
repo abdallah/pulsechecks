@@ -14,6 +14,16 @@ def create_auth_client() -> AuthInterface:
         ValueError: If cloud_provider is not supported
     """
     settings = get_settings()
+    # AUTH_PROVIDER decouples identity from the hosting cloud so the AWS
+    # warm standby can verify the same Firebase tokens as the GCP primary.
+    provider = (settings.auth_provider or settings.cloud_provider).lower()
+    if provider == "firebase":
+        from .firebase import FirebaseAuth
+        return FirebaseAuth()
+    if provider == "cognito":
+        from .cognito import CognitoAuth
+        return CognitoAuth()
+
     cloud_provider = settings.cloud_provider.lower()
 
     if cloud_provider == "aws":

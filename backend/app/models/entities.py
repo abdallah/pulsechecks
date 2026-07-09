@@ -96,6 +96,7 @@ class Check(BaseModel):
     escalation_minutes: Optional[int] = None  # Minutes before escalating
     escalation_alert_channels: list[str] = []  # Alert channels for escalated alerts
     tags: list[str] = []  # Free-form labels for filtering/grouping
+    managed_by_sync: bool = False  # Mirrored from the primary by standby sync
     escalation_mattermost_channels: list[str] = []  # Mattermost channels for escalated alerts (legacy)
     escalation_triggered_at: Optional[str] = None  # When escalation was last triggered
 

@@ -145,6 +145,22 @@ class FirestoreClient(DatabaseInterface):
             mattermost_webhooks=data.get('mattermostWebhooks', []),
         )
 
+    async def list_all_teams(self) -> List[Team]:
+        """List every team (definition export / standby sync)."""
+        teams = []
+        async for doc in self.db.collection('teams').stream():
+            data = doc.to_dict()
+            teams.append(Team(
+                team_id=data['teamId'],
+                name=data['name'],
+                slug=data.get('slug'),
+                created_at=data['createdAt'],
+                created_by=data['createdBy'],
+                mattermost_webhook_url=data.get('mattermostWebhookUrl'),
+                mattermost_webhooks=data.get('mattermostWebhooks', []),
+            ))
+        return teams
+
     async def get_team_by_slug(self, team_slug: str) -> Optional[Team]:
         """Get team by slug."""
         query = self.db.collection('teams').where('slug', '==', team_slug).limit(1)
@@ -346,6 +362,7 @@ class FirestoreClient(DatabaseInterface):
             'expectedString': check.expected_string,
             'failureThreshold': check.failure_threshold,
             'tags': check.tags or [],
+            'managedBySync': check.managed_by_sync,
         }
 
         # Remove None values (but keep slug and other important fields)
@@ -1143,4 +1160,5 @@ class FirestoreClient(DatabaseInterface):
             suppress_duration_minutes=int(data['suppressDurationMinutes']) if data.get('suppressDurationMinutes') else None,
             consecutive_failure_count=int(data.get('consecutiveFailureCount', 0)),
             tags=data.get('tags', []),
+            managed_by_sync=bool(data.get('managedBySync', False)),
         )

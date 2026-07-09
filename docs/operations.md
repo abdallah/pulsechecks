@@ -51,6 +51,76 @@ curl -X POST https://api.pulsechecks.example.com/ping/test-token \
   -d "Health check test"
 ```
 
+## Warm Standby & Mutual Watching (Who Watches the Watchers)
+
+Two independent deployments watch **each other**, dogfooding PulseChecks
+itself. GCP is the primary; AWS runs as a warm standby that can take over
+ingestion + alerting.
+
+### Mutual watching (sentinel checks — set up once)
+
+On the **AWS** deployment (watches GCP):
+1. Create an HTTP check on `https://api.<domain>/health` — detects GCP API down.
+2. Create a heartbeat check; set the GCP primary's `HEARTBEAT_URL` to its
+   ping URL — detects GCP's detection loop silently stopping.
+3. Attach real alert channels (SNS email / Mattermost) to both.
+
+On the **GCP** deployment (watches AWS): mirror image — HTTP check on the
+AWS API's `/health`, and AWS's `HEARTBEAT_URL` pings a GCP-hosted check.
+
+Accepted residual risk (explicit decision): a *simultaneous* AWS+GCP
+failure silences monitoring. No third-party backstop is configured.
+
+### Standby configuration (AWS tfvars)
+
+```hcl
+auth_provider       = "firebase"        # one identity space with the primary
+firebase_project_id = "<gcp-project>"
+standby_mode        = true              # shadow alerting for synced checks
+sync_token          = "<long random>"   # same value as GCP's sync_token
+primary_export_url  = "https://api.<domain>/internal/export-definitions"
+
+enable_cross_cloud_failover = true
+primary_api_fqdn            = "<GCP LB hostname or api domain>"
+gcp_primary_api_ip          = "<terraform output from infra/gcp>"
+```
+
+On GCP, set the matching `sync_token`. The sync payload contains **check
+ping tokens and channel configurations** — treat `sync_token` as a
+database credential.
+
+### How it behaves day-to-day
+
+- Every 5 min the standby pulls team/member/check/channel definitions
+  (`standby-sync` Lambda) and mirrors them, stamped `managed_by_sync`.
+- The standby's late detector runs in **shadow mode**: it tracks state for
+  synced checks but never alerts for them (the primary is alerting).
+  Its own sentinel checks alert normally.
+- Route53 health-checks the primary's `/health` every 30s; on 3
+  consecutive failures, `api.<domain>` fails over to the AWS API Gateway
+  (TTL 60s). Customer pings start landing on the standby automatically —
+  tokens match because they were synced.
+
+### Promotion runbook (manual, by design)
+
+DNS failover for *ingestion* is automatic. Enabling the standby's
+*alerting* is a human decision — automatic promotion under a network
+partition would produce split-brain double alerting.
+
+1. Confirm the primary is really down (not just the health check):
+   Cloud Run console, Cloud Status Dashboard, `curl` the run.app URL.
+2. Verify DNS has failed over: `dig api.<domain>` returns the AWS answer.
+3. Promote: set `standby_mode = false` in the AWS tfvars and apply
+   (or update the two Lambdas' `STANDBY_MODE` env var to `false` directly
+   for speed) — synced checks now alert.
+4. Announce; monitor the AWS deployment's Alert History for deliveries.
+
+**Fail-back** when GCP recovers: confirm Route53 flipped back to primary,
+then restore `standby_mode = true` on AWS. The next sync pull re-mirrors
+anything that changed during the outage window. Note: pings ingested on
+AWS during failover stay on AWS (history diverges for that window —
+accepted; definitions re-converge automatically).
+
 ## Rate Limiting Architecture
 
 Rate limiting is enforced **at the cloud edge, per client IP** — never as a

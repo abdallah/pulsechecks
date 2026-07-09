@@ -229,6 +229,11 @@ class DatabaseInterface(ABC):
         """Delete a maintenance window."""
         pass
 
+    @abstractmethod
+    async def list_all_teams(self) -> List[Team]:
+        """List every team (definition export / standby sync)."""
+        pass
+
     # Audit log operations
 
     @abstractmethod

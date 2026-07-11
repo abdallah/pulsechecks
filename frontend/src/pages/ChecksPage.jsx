@@ -869,7 +869,7 @@ export default function ChecksPage({ user, onLogout }) {
                     <div className="mt-2 sm:flex sm:justify-between">
                       <div className="sm:flex space-x-4">
                         <p className="flex items-center text-sm text-gray-500">
-                          Period: {formatDuration(check.periodSeconds)}
+                          {check.type === 'cron' ? `Schedule: ${check.schedule}` : `Period: ${formatDuration(check.periodSeconds)}`}
                         </p>
                         <p className="flex items-center text-sm text-gray-500">
                           Grace: {formatDuration(check.graceSeconds)}

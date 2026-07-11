@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "vite --mode mock",
     "build": "vite build",
     "build:aws": "VITE_CLOUD_PROVIDER=aws vite build",
     "build:gcp": "VITE_CLOUD_PROVIDER=gcp vite build",

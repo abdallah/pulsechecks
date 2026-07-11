@@ -1,12 +1,23 @@
-import { Activity } from 'lucide-react'
+import { Activity, Wand2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { login, handleCallback } from '../lib/auth'
+import { login, handleCallback, setTokens } from '../lib/auth'
 import { config } from '../config'
+
+const isMock = import.meta.env.VITE_MOCK === 'true'
 
 export default function LoginPage({ onLogin = () => {} }) {
   const navigate = useNavigate()
   const [loginError, setLoginError] = useState(null)
+
+  function handleMockSignIn() {
+    // Design-sandbox only (VITE_MOCK=true): skip real OAuth entirely and
+    // hand the mock API server a token it will accept unconditionally.
+    const tokens = { id_token: 'mock-token', access_token: 'mock-token' }
+    setTokens(tokens)
+    onLogin(tokens)
+    navigate('/', { replace: true })
+  }
 
   async function handleSignIn() {
     setLoginError(null)
@@ -58,12 +69,22 @@ export default function LoginPage({ onLogin = () => {} }) {
         </div>
         
         <div className="mt-8 space-y-6">
-          <button
-            onClick={handleSignIn}
-            className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Sign in with Google Workspace
-          </button>
+          {isMock ? (
+            <button
+              onClick={handleMockSignIn}
+              className="group relative w-full flex justify-center items-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            >
+              <Wand2 className="h-4 w-4 mr-2" />
+              Continue with demo data
+            </button>
+          ) : (
+            <button
+              onClick={handleSignIn}
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Sign in with Google Workspace
+            </button>
+          )}
 
           {loginError && (
             <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">
@@ -72,8 +93,14 @@ export default function LoginPage({ onLogin = () => {} }) {
           )}
           
           <div className="text-center text-xs text-gray-500">
-            <p>Secure authentication via Google Workspace SSO</p>
-            <p className="mt-1">Domain-restricted access</p>
+            {isMock ? (
+              <p>Design sandbox — fixture data, nothing here is real or saved anywhere</p>
+            ) : (
+              <>
+                <p>Secure authentication via Google Workspace SSO</p>
+                <p className="mt-1">Domain-restricted access</p>
+              </>
+            )}
           </div>
         </div>
       </div>
